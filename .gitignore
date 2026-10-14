@@ -39,3 +39,6 @@ deploy/
 # === Git ===
 .gitkeep
 vendor/
+
+# === PHPUnit ===
+.phpunit.cache/

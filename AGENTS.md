@@ -27,7 +27,11 @@ Do not introduce a new architectural pattern when an established pattern already
 
 Repository map
 
-Theme root: `wp-content/themes/h2otwock` (Sage 11 + Acorn 5, PHP >= 8.2, namespace `App\` → `app/`).
+Theme root: `wp-content/themes/guesstimate` (Sage 11 + Acorn 5, PHP >= 8.2, namespace `App\` → `app/`).
+
+Motyw powstał z kopii motywu strony h2otwock: bloki ACF, `variables.scss` i layout `app` to pozostałość
+strony publicznej. Właściwym produktem jest aplikacja **Guesstimate** pod `/app/` — patrz sekcja
+„Guesstimate — aplikacja /app/” niżej.
 
 | Ścieżka | Zawartość |
 |---|---|
@@ -46,6 +50,13 @@ Theme root: `wp-content/themes/h2otwock` (Sage 11 + Acorn 5, PHP >= 8.2, namespa
 | `resources/css/blocks/*.scss` | styl per blok, importowany w `app.css` |
 | `resources/js/blocks/*.js` | JS per blok, ładowany warunkowo z `app.js` |
 | `public/build/**` | **artefakty builda są w gicie** (patrz „Build i assety”) |
+| `app/Guesstimate/**` | aplikacja Guesstimate (moduły: `Auth`, `Http`, `Support`, kolejne: `Pricing`, `Offers`…) |
+| `app/Providers/GuesstimateServiceProvider.php` | integracja aplikacji z WP (role, logowanie, wp-admin) |
+| `routes/app.php` | trasy `/app/*` (Acorn router, grupa middleware `gst`) |
+| `database/migrations/` | migracje tabel `wp_gst_*` (`wp acorn migrate`) |
+| `resources/views/guesstimate/**`, `components/gst/**`, `errors/**` | widoki i komponenty aplikacji |
+| `resources/css/guesstimate.css`, `resources/js/guesstimate.js` | osobne wejścia Vite aplikacji |
+| `tests/Unit/**` | testy PHPUnit logiki bez WordPressa (`composer test`) |
 
 Zanim dodasz nową abstrakcję, sprawdź `app/Support/SectionClasses.php` i `resources/css/variables.scss` —
 większość rzeczy tam już jest.
@@ -56,6 +67,170 @@ i `$pole['alt']` (wzorce: `values.blade.php`, `hero.blade.php`). Nie twórz `x-p
 
 ⸻
 
+Guesstimate — aplikacja /app/
+
+Wewnętrzne narzędzie OhSoFresh Creative do wyceny projektów WWW. Plan i model kalkulacji: dokument
+„Guesstimate — analiza i plan MVP”. Zasady stylu bloków ACF powyżej **nie dotyczą** aplikacji —
+obowiązuje to, co niżej.
+
+**Moduły (`app/Guesstimate/`)**
+
+| Katalog | Zawartość |
+|---|---|
+| `Pricing/` | silniki wyceny bez WordPressa: `BudgetEngine` 2.x (model budżetowy, nowe oferty) i `PricingEngine` 1.x (stary model, wersje historyczne); `BudgetInput`, `PricingInput`, `Stage`, `LineItem`, `Cost`, `CostTotals`, `Rates`, `Rounding`, `RiskLevel`, `CalcModel` |
+| `Offers/` | modele `Offer`, `OfferVersion`, `Version/*` (snapshot wersji), `OfferService` (tworzenie, wersje, statusy, duplikaty, historia), `VersionPricing` (snapshot → PricingInput), `VersionCalculator`, `VersionCopier`, `OfferNumberGenerator`, `OfferPolicy`, `OfferQuery`, `OfferForm`, `OfferSummary`, `ResultPresenter` |
+| `Offers/` (v2) | `BudgetPricing` (snapshot → BudgetInput, statystyki mapy), `BudgetSettings`, `BudgetPresenter`, `LegacyConverter` (kopia starej wersji → model budżetowy), `OfferContent` (treści + czyszczenie HTML), `PublicOffer` (snapshot dla klienta), `PublicationService`, `Publication`, `PublicationStatus`, `ViewTracker`, `OfferView` |
+| `Sitemap/` | `PageList` (uproszczona mapa — v2); `SitemapPayload`, `SitemapService`, `SitemapStats` (stary edytor drzewa, tylko wersje historyczne) |
+| `Document/` | oferta online jako dokument stron A4 poziomo: `Pages` (8 typów stron, układy `PAGE_LAYOUTS`, domyślne nagłówki), `DocumentSettings` (ustawienia dokumentu wersji, `fitHash`), `DocumentForm` (teksty — krok 5 i edytor; `design()` — układ, tło, zdjęcie strony, nagłówek, widoczność), `DocumentEditor` (edytor wizualny: stan, walidacja, dane widoku), `DocumentBuilder` (część snapshotu publikacji; tryb edytora z ukrytymi stronami), `DocumentView` (render, wartości domyślne dla starszych snapshotów), `DocumentDesigner` (biblioteka teł do wyboru), `MediaRefs` (ochrona załączników używanych w publikacjach), `Background`, `CaseStudy`, `Contacts`, `Media` (biblioteka mediów WP, `browse()`), `Markup` (`**akcent**`) |
+| `Ai/` | `AiService` (limity, dziennik `gst_ai_requests`), `OpenAiClient`, `FeatureEstimator`, `ContentWriter` (treści, krótkie teksty stron `text:<pole>`, „Dopasuj tekst do strony” — akcja `fit`; zawsze propozycja do akceptacji), `OfferContext` (dane bez danych osobowych, cen i notatek) |
+| `Integrations/` | `HttpJson` (wp_remote_request + timeouty, `IntegrationException::$apiCode` = ECODE z odpowiedzi), `ClickUp/*` — OAuth 2.0 per użytkownik, tylko odczyt: `OAuthApp` (Client ID/Secret/Redirect URI ze stałych `GST_CLICKUP_*` w wp-config lub env), `ClickUpAccount` (start/callback OAuth, `state`, token, konfiguracja, „Sprawdź połączenie”, rozłączenie), `ClickUpConnection` (model `gst_clickup_connections`), `ClickUpSync` (synchronizacja partiami w tle do `gst_clickup_index`), `ClickUpDirectory` (wyszukiwanie w indeksie użytkownika, import), `ClickUpClient` (Bearer), `ClickUpMapper` |
+| `Clients/`, `Library/`, `Settings/` | klienci (+ `Nip`), biblioteka funkcjonalności i typów podstron, ustawienia (`SettingsRepository`, `Defaults`, `RatesValidator`) |
+| `Dashboard/` | `DashboardStats` |
+| `Auth/`, `Http/`, `Support/` | role i capabilities, kontrolery i middleware, formatowanie/parsowanie/walidacja (`Format`, `Input`, `Validation`, `Flash`, `SchemaStatus`) |
+
+**Zasady wyceny (nie zmieniać bez decyzji biznesowej)**
+
+Model budżetowy (silnik 2.x, `calc_model = budget`, wszystkie nowe wersje i duplikaty):
+
+- Cena wariantu = suma godzin × stawka wariantu. Godziny: zakres UX + podstrony mapy (każda = 1 jednostka,
+  godziny UI/Dev z oferty lub nadpisane) + jednostki rodzaju projektu (osobna pozycja, nie adresy URL)
+  + funkcjonalności + prace dodatkowe.
+- Warsztaty Discovery to kwota stała **zawarta** w cenie; reszta jest prezentowana jako podział UX/UI/Dev
+  (domyślnie 20/30/50). UX i UI zaokrąglane do kroku, Development przejmuje resztę — suma = cena.
+- Koszty zewnętrzne (jednorazowe i cykliczne) są poza ceną i bez podziału.
+- Wybrany wariant (`selected_variant`) widzi klient; panel pokazuje wszystkie trzy.
+- Wersje w starym modelu (hourly/percent) liczą się po staremu i są tylko do odczytu; nowa wersja/duplikat
+  przechodzi przez `LegacyConverter` (dane wersji źródłowej się nie zmieniają).
+
+Wspólne zasady:
+
+- Trzy warianty ryzyka = trzy niezależne stawki (Low ≤ Mid ≤ High, > 0, maks. 2 miejsca po przecinku,
+  limit techniczny 100 000 PLN/h). Godziny są wspólne; bez mnożników ryzyka.
+- Widełki godzin [min, max] dają kwotę od–do w każdym wariancie. Kolumna „Wycena od–do” = min Low – max High.
+- Szablon liczy się raz; podstrona indywidualna ma własny szablon; treść = sztuki × godziny/szt.
+- UX wyłącznie z zakresu UX oferty (Zoptymalizowany / Pełny), nigdy z szablonów.
+- Model procentowy = calc.xlsx: godziny × stawka, kwota stała Discovery w środku, reszta wg udziałów.
+- Oferta i jej wersje mają własną kopię stawek, UX, etapów i zaokrągleń. Ustawienia globalne nigdy nie
+  przeliczają zapisanych ofert. Wysłanie zamraża wersję; zmiany = nowa wersja.
+- Kwoty w groszach (`BIGINT`), godziny `DECIMAL(10,2)`, obliczenia na `brick/math`, HALF_UP.
+
+**Infrastruktura**
+
+- **Routing:** Acorn router, trasy w `routes/app.php`, rejestrowane w `functions.php`
+  (`withRouting(using: …)` w grupie `gst`). Nie używamy grupy `web` (sesje Laravela, APP_KEY).
+  Publiczna oferta: `routes/public.php` w grupie `gst.public` (bez logowania i nonce, no-store, noindex) —
+  `/offer/{token}/` (token 32 znaki) i `POST /offer/{token}/view` (sygnał wyświetlenia z przeglądarki).
+- **Sekrety:** klucz OpenAI w `Support\Secrets` (libsodium, klucz z soli WP). Nigdy nie
+  przekazuj ich do widoków ani JS — tylko `describe()` (maska). Wywołania AI/ClickUp wyłącznie z serwera.
+  Tokeny OAuth ClickUp: `Secrets::seal($token, 'clickup-oauth-user-{id}')` w `gst_clickup_connections.token_ciphertext`
+  (`$hidden` w modelu; szyfrogram związany z użytkownikiem). Client Secret tylko w wp-config/env — nigdy w bazie i repo.
+  Stary wspólny Personal API Token (`clickup_token`) nie jest używany; w ustawieniach można go usunąć.
+- **ClickUp (OAuth per użytkownik):** „Moje integracje” (`/app/moje-integracje`, `ClickUpController`) — każdy użytkownik
+  z `CREATE_OFFERS` łączy własne konto. Start: POST + nonce → `state` (32 B, w transiencie tylko sha256, 10 min,
+  jednorazowy, przypisany do użytkownika) → `https://app.clickup.com/api?client_id&redirect_uri&state`. Callback
+  `GET /app/integrations/clickup/callback` → `POST /api/v2/oauth/token` (JSON `client_id`, `client_secret`, `code`).
+  Token wg dokumentacji nie wygasa i nie ma refresh tokenu: 401 z OAUTH_019/021/025/077 → `reconnect_required`
+  („Połącz ponownie”), OAUTH_023/026/027/029–045 → brak autoryzacji Workspace (połączenie zostaje). Brak endpointu
+  revoke — „Rozłącz” usuwa token i indeks lokalnie. Konfiguracja per użytkownik w `config` (team, space, listy
+  z nazwami, mapowanie, `field_labels`). Synchronizacja (`ClickUpSync`, jeden silnik dla przycisku, harmonogramu
+  i pierwszej synchronizacji po zapisaniu konfiguracji): partia = 1 strona API (100 zadań), stan w `sync_state`.
+  Tryby: `incremental` (`date_updated_gt` = znacznik listy − 5 min; aktualizuje, nie usuwa) i `full` (raz na dobę,
+  po zmianie konfiguracji, dla list bez znacznika; po kompletnym przebiegu usuwa wpisy usunięte / przeniesione
+  poza wybrane listy — tylko dla list pobranych w całości). Znaczniki per lista w `list_state` przesuwają się po
+  poprawnym pobraniu listy. Blokada per użytkownik `add_option('gst_cu_sync_lock_{id}')` (90 s), 429 → `waiting`
+  60 s, sieć/timeout/5xx → 3 próby, potem `error` (harmonogram wznawia tę samą partię); 401 → reconnect_required.
+  Harmonogram (`ClickUpScheduler`): `next_sync_at` co 15 min, `runDue()` planuje należne i wykonuje partie
+  round-robin (globalna blokada `gst_cu_runner_lock`). Wywołanie: systemowy cron → `wp guesstimate clickup sync-due`
+  (rezerwa: WP-Cron `gst_clickup_tick` co 5 min; awaryjnie odpytywanie statusu w „Moich integracjach”).
+  Diagnostyka: `wp guesstimate clickup status`, `wp guesstimate clickup sync --user-id=ID [--full]`
+  (`--user` to globalny parametr WP-CLI — nie używać).
+  Wyszukiwarka kreatora czyta tylko `gst_clickup_index` zalogowanego użytkownika (bez zapytań do ClickUp).
+  Import: dopasowanie po `clickup_id` → wybór użytkownika → unikalny NIP → podobni (409 `needs_choice`) → nowy;
+  uzupełnia tylko puste pola. Klient usunięty w Guesstimate nigdy nie jest przywracany automatycznie: 409 z `deleted`
+  → „Przywróć klienta” (`restore`, tylko MANAGE_CLIENTS) albo „Zaimportuj jako nowego” (`create_new`; powiązanie
+  z zadaniem przechodzi na nowy rekord). Klienci są wspólni, połączenia i indeksy prywatne.
+- **Klienci — usuwanie:** soft delete (`deleted_at`, `deleted_by`), zakładka „Usunięci” z przywracaniem
+  (`MANAGE_CLIENTS`: Administrator, Manager). `ClientService::delete()` w transakcji z `lockForUpdate` odmawia,
+  gdy klient ma jakąkolwiek ofertę (`Offer::withTrashed`, także w koszu); tworzenie / zmiana klienta oferty
+  wywołuje `ClientService::lockActive()` (ten sam wiersz) → brak wyścigu. Usunięcie nie dotyka ClickUp ani indeksów.
+- **Logowanie:** `/login`, `/logout`, `/forgot-password`, `/reset-password` (`routes/auth.php`, grupa `gst.guest`,
+  `AuthController`, `Auth\AppLogin`). `wp_signon()` (e-mail lub login, „Nie wylogowuj mnie” = 14 dni WordPressa),
+  reset hasła: `retrieve_password` / `check_password_reset_key` / `reset_password` (e-mail z linkiem do
+  /reset-password przez filtr `retrieve_password_notification_email`). `login_url` → /login (filtr dodawany na `init`,
+  bo Acorn przy starcie pomija routing dla ścieżki `wp_login_url()`), wp-login.php GET (logowanie, lostpassword, rp) →
+  nasze ekrany, pozostałe akcje natywnie; awaryjnie `/wp-login.php?native=1`. `LoginThrottle` (filtr `authenticate`:
+  5 prób na IP+login, 20 na IP / 15 min — także wp-login.php i XML-RPC). Przekierowania: `AppLogin::safeRedirect()`.
+- **Middleware `gst`:** `UnslashInput` (cofa `wp_magic_quotes` — bez tego cudzysłowy dostają ukośniki),
+  `PreventCaching` (no-store + LiteSpeed no-cache), `Authenticate` (zalogowany użytkownik WP z
+  `gst_access_app`), `EnsureSchema` (instrukcja zamiast błędu, gdy brak tabel), `VerifyNonce` (żądania
+  nie-GET: pole `_gst_nonce` / nagłówek `X-GST-Nonce`, akcja `gst_app`), `SubstituteBindings`.
+  Uprawnienia modułu na trasie: `->middleware('gst.can:' . Capabilities::X)`, uprawnienia do ofert:
+  `OfferPolicy` w kontrolerze i w zapytaniach (`scope()`).
+- **Role:** `Roles::definitions()` (Administrator, `gst_manager`, `gst_employee`). Po zmianie podbij
+  `Roles::VERSION` — role zsynchronizują się na `init`.
+- **Formularze:** bez sesji Laravela. Błąd walidacji → ponowny render widoku (422) z `$errors` i `$old`,
+  sukces → przekierowanie z komunikatem `Flash` (transient użytkownika). Komunikaty walidacji po polsku
+  w `Support\Validation`.
+- **Baza:** migracje Acorna w `database/migrations`, tabele `gst_*` (prefiks WP dokłada `wp_`). Query
+  builder dokłada prefiks także do aliasów — nie używaj `selectRaw` z nazwami `alias.kolumna`.
+- **Widoki:** layout `guesstimate.layouts.app`, komponenty `x-gst.*`, tokeny wyłącznie w `@theme`
+  w `resources/css/guesstimate.css` (`ink`, `canvas`, `surface`, `line`, `rail`, `accent`, `risk-low|mid|high`,
+  `status-*`, `rounded-control|panel`, `shadow-panel`). Bez wartości arbitralnych i hexów w Blade.
+  W jednym pliku Blade nie mieszaj `@php(...)` z blokami `@php … @endphp` (błąd parsera Blade).
+  Wrappery tabel: `relative overflow-x-auto` (bez `relative` elementy `sr-only` rozpychają stronę na mobile).
+- **JS:** Alpine (`resources/js/guesstimate/*.js`): `pageList`, `rowList`, `calcPreview`, `clientPicker`,
+  `featurePicker`, `richText` (lekki edytor contenteditable), `offerContent`, `copyText`, `clickupIntegration`,
+  `documentEditor` (edytor wizualny dokumentu).
+  Przeglądarka nie liczy cen — podgląd w kroku 4 pyta serwer (`POST /app/oferty/{id}/podglad`).
+- **Oferta online (dokument):** strony `public/partials/pages.blade.php` + `public/pages/*.blade.php` — jedna
+  implementacja dla oferty publicznej i edytora (`html[data-mode]`: `public` | `editor` | `thumbs`). Wejścia Vite
+  `resources/css/offer.css` (tokeny `night`, `paper`, `orange`, `viewer`…, `--aspect-a4`, font Sora z `resources/fonts/sora`)
+  i `resources/js/offer.js`. Dwa sposoby prezentacji: **arkusz** (`.osf-sheet` — desktop od 1180 px, edytor, miniatury):
+  proporcje A4 297/210, typografia i odstępy w `cqw` (wariant `sheet:` zamiast `md:`; w `.osf-page` `--spacing` jest
+  w cqw, więc `mt-4`, `size-6` skalują się ze stroną — strona wygląda tak samo w każdej skali); **układ płynny**
+  (telefon, tablet): dowolna wysokość, tekst w px. Nadmiar treści na arkuszu → strona „cd.” tego samego typu;
+  wyjątek `Pages::FIT` („Sytuacja”): poziomy `data-fit-level` 0–5 (odstępy → interlinia → tekst do min. 1.06cqw),
+  potem `data-overflow` (nic nie jest ucinane, publikacja blokowana). Układy: `osf-media-right|left` (zdjęcie strony
+  `osf-media` — osobny element, nie tło), `full`, `tiles`. Grafiki tylko z biblioteki mediów WP; snapshot zapisuje
+  ID, adresy, wymiary zdjęć i teł, układy, nagłówki, kontakt i realizacje.
+- **Kompozycja stron:** na arkuszu logo zostaje u góry, a główny blok (`osf-column` → `osf-center`: nagłówek + treść
+  jako jedna grupa) jest wyśrodkowany w pionie marginesami `auto` (przy dużej ilości treści marginesy maleją do 0,
+  nic nie jest ucinane; podział „cd.” i dopasowanie działają bez zmian); dolny odstęp grupy = środek optyczny.
+  Stopki pozycjonowane absolutnie (np. „Oferta ważna”) nie przesuwają się. Pomarańcz tekstów: token
+  `--color-orange` (#F49E02) w `offer.css`; gradient dekoracyjny ma osobny `--color-gradient-start`. Usługi dodatkowe:
+  minimalistyczna tabela `osf-table-row` (tylko poziome separatory `night-line`).
+- **Edytor dokumentu** (`/app/oferty/{id}/dokument` i krok 6 kreatora): `DocumentController` + widok
+  `guesstimate.editor.index` (układ `layouts.editor` bez menu bocznego) + Alpine `documentEditor`. Stan = istniejące pola
+  wersji (`content`, `document`) — te same co w kroku 5. Podgląd LIVE: `POST …/dokument/podglad` renderuje strony dla
+  niezapisanego stanu (nic nie zapisuje), ramki `…/dokument/ramka(?tryb=miniatury)` podmieniają strony przez
+  `window.gstDoc.render()` (bez przeładowania). Zapis tylko przyciskiem („Zapisz”), bez przeliczania kalkulacji.
+  Pomiar dopasowania z przeglądarki trafia do `document.fit_report` (ze skrótem stanu) — `PublicationService::blockers()`
+  blokuje publikację przepełnionej strony. „Wersja robocza różni się od publikacji” = inny `version_id` albo inny
+  odcisk snapshotu (`PublicationService::fingerprint`). Zamrożona wersja: edytor tylko do odczytu + „Utwórz wersję roboczą”.
+- **Zdjęcia w publikacjach:** `gst_media_refs` (zapisywane przy publikacji) + filtr `pre_delete_attachment` — załącznika
+  używanego w publikacji nie da się usunąć z biblioteki mediów (bez kopiowania plików). Referencje znikają przy trwałym
+  usunięciu oferty.
+- **Testy:** `composer test` — oba silniki (w tym przykład z calc.xlsx i brak podwójnego liczenia), mapowanie
+  wersji, mapa strony, stawki, NIP, statusy, formatowanie, mapowanie ClickUp, estymator, skracanie IP.
+- **Kolejność opcji:** MySQL normalizuje kolumny JSON (klucze sortowane po długości, potem alfabetycznie),
+  więc kolejność z `gst_settings`/snapshotów jest przypadkowa. Kolejność rodzajów projektu i zakresów UX
+  zawsze z kodu: `OfferVersion::SELECTABLE_TYPES` (Strona, Katalog, Sklep, Landing, Inny; `webapp` tylko dla
+  starych ofert) przez `BudgetSettings::types()`, `BudgetSettings::uxScopes()` (Zoptymalizowany, Pełny).
+  Domyślnie nowa oferta: `website` + `optimized`. „Inny” ma własną liczbę jednostek z kreatora
+  (`custom_units` → `budget.type_units`, 0–999), nie z ustawień.
+- **Kosz ofert:** soft delete (`deleted_at`, `deleted_by`), `TrashService` (trash/restore/forceDelete w
+  transakcji), `TrashController`, trasy `oferty/kosz…`. Przeniesienie do kosza wycofuje publikację (link 404,
+  historia zostaje); przywrócenie nie publikuje ponownie. Uprawnienia: `gst_manage_trash` (manager, admin —
+  cały kosz, przywracanie), `gst_delete_offers` (tylko admin — usuwanie na stałe z wpisaniem USUŃ);
+  pracownik przenosi i cofa tylko własne. Trwałe usunięcie kasuje wersje (+ tabele `gst_v_*`), publikacje,
+  wyświetlenia i historię; klient i media WP zostają. Nowa tabela powiązana z ofertą → dopisz ją w
+  `TrashService::forceDelete()`.
+- **Blade + komponenty:** dyrektywy (`@js`, `@json`) nie działają w atrybutach `<x-gst.*>` — przekaż dane
+  przez `data-*` z `{{ }}` albo użyj zwykłego elementu HTML.
+- **Język:** interfejs po polsku; URL-e modułów po polsku (`/app/oferty`), nazwy tras i kod po angielsku.
+
+⸻
+
 Komendy
 
 Menedżer pakietów: **yarn** (`.yarnrc.yml`, `nodeLinker: node-modules`). W repo leżą też
@@ -63,19 +238,21 @@ Menedżer pakietów: **yarn** (`.yarnrc.yml`, `nodeLinker: node-modules`). W rep
 pnpm i nie aktualizuj tych plików.
 
 ```bash
-yarn dev      # Vite dev server: h2otwock.local:6011 (strictPort, HMR przez ws)
+yarn dev      # Vite dev server: guesstimate.local:6016 (strictPort, HMR przez ws)
 yarn build    # produkcyjny build do public/build
 ```
 
 ```bash
 composer install
+composer test             # testy PHPUnit (tests/Unit)
+wp acorn migrate          # migracje tabel aplikacji wp_gst_*
 wp acorn acf:cache        # przebuduj cache pól ACF po zmianach w app/Blocks|Fields|Options
 wp acorn view:clear       # gdy Blade zwraca stary widok
 ```
 
 Node >= 20.
 
-Build (`yarn build`) i komendy Acorn (`wp acorn acf:cache`, `wp acorn view:clear`) uruchamia użytkownik
+Build (`yarn build`) i komendy Acorn (`wp acorn migrate`, `wp acorn acf:cache`, `wp acorn view:clear`) uruchamia użytkownik
 samodzielnie — nie wykonuj ich automatycznie. Jeśli zmiana tego wymaga, poinformuj o tym w podsumowaniu
 zamiast odpalać komendę.
 
@@ -86,10 +263,11 @@ WP-CLI (odczyt treści, import mediów, wstawianie bloków) możesz uruchamiać 
 na Local i wymaga podania socketu MySQL:
 
 ```bash
-php -d "mysqli.default_socket=$HOME/Library/Application Support/Local/run/CacTG7LQO/mysql/mysqld.sock" \
-  /opt/homebrew/bin/wp --path=/Users/Arek/Websites/h2otwock/app/public <komenda>
+php -d "mysqli.default_socket=$HOME/Library/Application Support/Local/run/<ID>/mysql/mysqld.sock" \
+  /opt/homebrew/bin/wp --path=/Users/Arek/Websites/guesstimate/app/public <komenda>
 ```
 
+`<ID>` strony guesstimate w Local: `ls ~/Library/Application\ Support/Local/run/` (do uzupełnienia).
 Local musi mieć uruchomioną stronę, inaczej socketu nie ma. `wp db query` nie zadziała (brak binarki
 `mysql`) — używaj `wp eval` / `wp eval-file`.
 

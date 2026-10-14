@@ -1,0 +1,386 @@
+/*--- GUESSTIMATE — publiczna oferta online /offer/{token}/ ---*/
+/* Osobne wejście Vite w stylu OhSoFresh: ciemne tło, białe teksty, pomarańczowe akcenty.
+   Fonty lokalne (bez zewnętrznych zapytań). */
+
+@import 'tailwindcss' source(none);
+
+@source '../views/guesstimate/public';
+@source '../js/offer.js';
+
+/* Arkusz A4: strony skalowane proporcjonalnie (desktop, edytor, miniatury). Klasę ustawia skrypt w <head>. */
+@custom-variant sheet (&:where(.osf-sheet, .osf-sheet *));
+
+@font-face {
+  font-family: 'Sora';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('../fonts/sora/sora-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Sora';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('../fonts/sora/sora-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@theme {
+  --font-sans: 'Sora', ui-sans-serif, system-ui, sans-serif;
+
+  --color-night: #0c1118;
+  --color-night-raised: #141b26;
+  --color-night-line: #263043;
+  --color-paper: #ffffff;
+  --color-paper-soft: #c9cfdb;
+  --color-paper-muted: #8d96a8;
+  --color-viewer: #dfe2e7;
+  --color-viewer-ink: #3b4352;
+
+  /* Pomarańcz OhSoFresh: wszystkie pomarańczowe teksty i akcenty dokumentu (text-orange, linki, separatory). */
+  --color-orange: #f49e02;
+  /* Pierwszy kolor dekoracyjnego gradientu (osobny element projektu — bez zmian). */
+  --color-gradient-start: #efa43a;
+  --color-flame: #e2452e;
+  --color-magenta: #a832c2;
+  --color-violet: #6a35d8;
+  --color-indigo: #4a4af0;
+
+  --aspect-a4: 297 / 210;
+
+  --radius-card: 1.25rem;
+  --radius-page: 0.375rem;
+  --shadow-page: 0 1px 2px rgb(16 22 34 / 0.12), 0 10px 30px rgb(16 22 34 / 0.18);
+}
+
+@layer base {
+  html {
+    background-color: var(--color-night);
+    color: var(--color-paper);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  ::selection {
+    background-color: var(--color-orange);
+    color: var(--color-night);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-orange);
+    outline-offset: 3px;
+  }
+}
+
+/* Tło: delikatna poświata w barwach marki zamiast zdjęć. */
+@utility osf-glow {
+  background-image:
+    radial-gradient(60rem 40rem at 100% 0%, color-mix(in oklab, var(--color-violet) 35%, transparent), transparent 70%),
+    radial-gradient(50rem 40rem at 0% 100%, color-mix(in oklab, var(--color-indigo) 22%, transparent), transparent 70%);
+}
+
+/* Pasek gradientu z referencji (pomarańcz → czerwień → fiolet → indygo). */
+@utility osf-gradient {
+  background-image: linear-gradient(90deg, var(--color-gradient-start), var(--color-flame) 30%, var(--color-magenta) 60%, var(--color-violet) 80%, var(--color-indigo));
+}
+
+@utility osf-dashed {
+  background-image: linear-gradient(90deg, var(--color-orange) 50%, transparent 50%);
+  background-size: 0.75rem 1px;
+  background-repeat: repeat-x;
+}
+
+@utility osf-vertical {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  -webkit-text-stroke: 1px var(--color-night-line);
+  color: transparent;
+}
+
+/* Treść z edytora (akapity, listy, linki). Odstępy i interlinia z dopasowania strony (--fit-gap, --fit-lh). */
+@utility osf-prose {
+  & > * + * { margin-top: var(--fit-gap, 1em); }
+  & p, & li { color: var(--color-paper); line-height: var(--fit-lh, 1.6); }
+  & strong, & b { font-weight: 700; }
+  & em, & i { font-style: italic; }
+  & ul { list-style: square; padding-left: 1.5em; }
+  & ol { list-style: decimal; padding-left: 1.5em; }
+  & li + li { margin-top: calc(var(--fit-gap, 1em) * 0.35); }
+  & li::marker { color: var(--color-paper-soft); }
+  & a { color: var(--color-orange); text-decoration: underline; text-underline-offset: 3px; }
+}
+
+/*--- Dokument: strony A4 poziomo (297 × 210 mm) ---*/
+
+/* Dwa sposoby prezentacji tej samej strony:
+   — arkusz (.osf-sheet: desktop od 1180 px, edytor, miniatury): proporcje A4, wszystkie wymiary w jednostkach
+     cqw (procent szerokości strony), więc strona wygląda identycznie w każdej skali — także w edytorze;
+   — układ płynny (telefon, tablet): strona o dowolnej wysokości z czytelnym tekstem, bez dzielenia na „cd.”.
+   Treść nigdy nie jest ucinana: gdy nie mieści się na arkuszu, skrypt przenosi ją na stronę „cd.”
+   albo (strona „Sytuacja”) dopasowuje typografię. */
+@utility osf-page {
+  position: relative;
+  width: 100%;
+  container-type: inline-size;
+  border-radius: var(--radius-page);
+  box-shadow: var(--shadow-page);
+  background-color: var(--color-night);
+  color: var(--color-paper);
+  isolation: isolate;
+  overflow: clip;
+
+  :root.osf-sheet & {
+    aspect-ratio: var(--aspect-a4);
+    /* Odstępy Tailwind (mt-4, gap-6, size-6…) skalują się z szerokością strony. */
+    --spacing: 0.3cqw;
+    --container-md: 40cqw;
+    --container-lg: 46cqw;
+    --container-xl: 52cqw;
+    --container-4xl: 78cqw;
+    --container-5xl: 88cqw;
+  }
+}
+
+@utility osf-page-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+@utility osf-bg-image {
+  width: 100%;
+  height: 100%;
+  object-position: center;
+}
+
+@utility osf-pad {
+  padding: 28px 20px;
+
+  @media (min-width: 640px) { padding: 36px 32px; }
+  :root.osf-sheet & { padding: 4.2cqw 4.8cqw; }
+}
+
+/* Kompozycja strony na arkuszu: logo zostaje u góry, główny blok treści (nagłówek + treść jako jedna grupa)
+   jest wyśrodkowany w pionie w pozostałej przestrzeni. Marginesy „auto” (nie „justify-content: center”):
+   gdy treści jest dużo, marginesy maleją do zera — blok zajmuje całą wysokość i nic nie wychodzi nad logo;
+   gdy treść przekracza stronę, działa podział na strony „cd.” albo dopasowanie typografii.
+   Dolny odstęp przesuwa środek grupy nieco w górę (środek optyczny zamiast matematycznego).
+   W układzie płynnym (telefon, tablet) treść płynie naturalnie. */
+@utility osf-column {
+  :root.osf-sheet & { display: flex; flex: 1 1 auto; flex-direction: column; }
+}
+
+@utility osf-center {
+  :root.osf-sheet & { margin-block: auto; padding-bottom: 3.2cqw; }
+}
+
+/* Minimalistyczna tabela (usługi dodatkowe): bez ramek i pionowych linii, subtelne poziome separatory. */
+@utility osf-table-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 1.5rem;
+  align-items: baseline;
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--color-night-line);
+
+  :root.osf-sheet & { column-gap: 3cqw; padding-block: 1.05cqw; }
+}
+
+@utility osf-logo {
+  height: 22px;
+  width: auto;
+
+  :root.osf-sheet & { height: 1.9cqw; }
+}
+
+/* Typografia: płynnie w px, na arkuszu w cqw (wzorzec 1123 px = A4 przy 96 dpi). */
+@utility osf-t-xs { font-size: 13px; line-height: 1.55; :root.osf-sheet & { font-size: 1.04cqw; } }
+@utility osf-t-sm { font-size: 14px; line-height: 1.6; :root.osf-sheet & { font-size: 1.16cqw; } }
+@utility osf-t-base { font-size: 15px; line-height: 1.6; :root.osf-sheet & { font-size: 1.3cqw; } }
+@utility osf-t-lg { font-size: 17px; line-height: 1.4; :root.osf-sheet & { font-size: 1.48cqw; } }
+@utility osf-t-xl { font-size: 19px; line-height: 1.3; :root.osf-sheet & { font-size: 1.78cqw; } }
+@utility osf-t-2xl { font-size: 22px; line-height: 1.2; :root.osf-sheet & { font-size: 2.2cqw; } }
+@utility osf-t-3xl { font-size: 24px; line-height: 1.15; :root.osf-sheet & { font-size: 2.65cqw; } }
+@utility osf-t-display { font-size: 30px; line-height: 1.12; :root.osf-sheet & { font-size: 3.9cqw; } }
+
+@utility osf-gap { gap: 14px; :root.osf-sheet & { gap: 1.4cqw; } }
+@utility osf-gap-lg { gap: 20px; :root.osf-sheet & { gap: 2.6cqw; } }
+
+/* Pionowy napis z obrysem przy prawej krawędzi strony (tylko arkusz, bez zdjęcia po prawej). */
+@utility osf-edge-label {
+  display: none;
+  position: absolute;
+  right: 1.4cqw;
+  top: 50%;
+  translate: 0 -50%;
+  writing-mode: vertical-rl;
+  rotate: 180deg;
+  font-size: 3.4cqw;
+  font-weight: 800;
+  white-space: nowrap;
+  -webkit-text-stroke: 1px var(--color-night-line);
+  color: transparent;
+  pointer-events: none;
+  user-select: none;
+
+  :root.osf-sheet & { display: block; }
+  :root.osf-sheet .osf-media-right & { display: none; }
+}
+
+@utility osf-bar-top {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 38%;
+  height: 6px;
+  clip-path: polygon(4% 0, 100% 0, 100% 100%, 7% 100%);
+
+  :root.osf-sheet & { height: 1.3cqw; }
+}
+
+@utility osf-bar-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 30%;
+  height: 5px;
+  clip-path: polygon(0 0, 94% 0, 100% 100%, 0 100%);
+
+  :root.osf-sheet & { height: 0.95cqw; }
+}
+
+/*--- Układy stron: tekst + zdjęcie, zdjęcie + tekst, pełna szerokość, kafelki ---*/
+
+/* Zdjęcie strony: osobny element (nie tło). Na arkuszu zajmuje pełną wysokość przy krawędzi strony,
+   w układzie płynnym jest blokiem nad (zdjęcie + tekst) lub pod treścią (tekst + zdjęcie). */
+@utility osf-media {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  background-color: var(--color-night-raised);
+
+  & img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+
+  /* Przejście zdjęcia w tło strony i fioletowa poświata jak we wzorze FARMAK. */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(200deg, color-mix(in oklab, var(--color-violet) 30%, transparent), transparent 55%);
+  }
+
+  :root.osf-sheet & {
+    position: absolute;
+    inset-block: 0;
+    width: 42%;
+    aspect-ratio: auto;
+  }
+
+  :root.osf-sheet .osf-media-right & { right: 0; }
+  :root.osf-sheet .osf-media-left & { left: 0; }
+}
+
+@utility osf-content {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+
+  :root.osf-sheet & { min-height: 100%; }
+
+  :root.osf-sheet .osf-media-right & { width: 58%; }
+  :root.osf-sheet .osf-media-left & { width: 58%; margin-left: 42%; }
+}
+
+/* Układ płynny: kolejność zdjęcia względem treści. */
+.osf-media-right, .osf-media-left { display: flex; flex-direction: column; }
+.osf-media-right > .osf-media { order: 1; max-height: 24rem; }
+.osf-media-left > .osf-media { order: -1; max-height: 24rem; }
+:root.osf-sheet .osf-media-right > .osf-media, :root.osf-sheet .osf-media-left > .osf-media { max-height: none; }
+:root.osf-sheet .osf-media-right, :root.osf-sheet .osf-media-left { display: block; }
+
+/*--- Dopasowanie strony „Sytuacja” do jednego arkusza A4 (zamiast stron „cd.”) ---*/
+/* Poziomy 1–5: mniejsze odstępy między akapitami, mniejsza interlinia, na końcu nieco mniejszy tekst.
+   Minimum czytelności: 1.06cqw (≈ 12 px przy szerokości wzorcowej 1123 px). */
+:root.osf-sheet [data-fit] { --fit-size: 1.3cqw; --fit-gap: 1em; --fit-lh: 1.6; }
+:root.osf-sheet [data-fit-level='1'] { --fit-gap: 0.7em; }
+:root.osf-sheet [data-fit-level='2'] { --fit-gap: 0.55em; --fit-lh: 1.5; }
+:root.osf-sheet [data-fit-level='3'] { --fit-size: 1.22cqw; --fit-gap: 0.5em; --fit-lh: 1.45; }
+:root.osf-sheet [data-fit-level='4'] { --fit-size: 1.14cqw; --fit-gap: 0.45em; --fit-lh: 1.4; }
+:root.osf-sheet [data-fit-level='5'] { --fit-size: 1.06cqw; --fit-gap: 0.4em; --fit-lh: 1.36; }
+:root.osf-sheet [data-fit] .osf-fit-text { font-size: var(--fit-size); }
+
+/*--- Tryby: arkusz publiczny, edytor, miniatury ---*/
+
+/* Desktop: duże, wyśrodkowane strony A4. */
+.osf-doc { width: 100%; max-width: 80rem; }
+:root.osf-sheet .osf-doc { max-width: min(85rem, (100vh - 7rem) * 297 / 210 + 6rem); }
+
+/* Edytor: jedna (wybrana) strona, szerokość z powiększenia podglądu. */
+:root.osf-editor, :root.osf-editor body { background-color: var(--color-viewer); background-image: none; }
+
+/* Edytor: układ ze zdjęciem, ale bez wybranego zdjęcia — przycisk zamiast pustej kolumny. */
+.osf-media-add {
+  position: absolute;
+  top: 2cqw;
+  right: 2cqw;
+  z-index: 1;
+  border: 1px dashed var(--color-paper-soft);
+  border-radius: 999px;
+  padding: 0.5cqw 1.2cqw;
+  font-weight: 700;
+  color: var(--color-paper);
+  background-color: color-mix(in oklab, var(--color-night) 70%, transparent);
+}
+:root.osf-editor .osf-doc { max-width: none; width: var(--page-w, 1123px); padding: 1.5rem 0 3rem; }
+:root.osf-editor:not(.osf-measuring) [data-doc-page]:not([data-current]) { display: none; }
+:root.osf-editor [data-edit] { cursor: pointer; outline: 1px dashed transparent; outline-offset: 3px; transition: outline-color 120ms; }
+:root.osf-editor [data-edit]:hover { outline-color: color-mix(in oklab, var(--color-orange) 70%, transparent); }
+:root.osf-editor [data-edit][data-selected] { outline: 2px solid var(--color-orange); }
+:root.osf-editor [data-doc-page][data-edit]:hover, :root.osf-editor [data-doc-page][data-edit][data-selected] { outline-offset: 0; }
+:root.osf-editor [data-overflow] { box-shadow: 0 0 0 3px var(--color-flame), var(--shadow-page); }
+:root.osf-editor a { pointer-events: none; }
+
+/* Miniatury: wszystkie strony w kolumnie (proporcje i treść jak na arkuszu). */
+:root.osf-thumbs, :root.osf-thumbs body { background-color: var(--color-paper); background-image: none; }
+:root.osf-thumbs .osf-doc { max-width: none; padding: 0.5rem; gap: 0.25rem; }
+:root.osf-thumbs [data-doc-page] { cursor: pointer; box-shadow: 0 0 0 1px rgb(16 22 34 / 0.15); }
+:root.osf-thumbs [data-doc-page][data-current] { box-shadow: 0 0 0 3px var(--color-orange); }
+:root.osf-thumbs [data-overflow] { box-shadow: 0 0 0 3px var(--color-flame); }
+:root.osf-thumbs [data-doc-page] * { pointer-events: none; }
+:root.osf-thumbs .osf-thumb-label { width: 100%; margin: 0 0 0.5rem; font-size: 0.6875rem; line-height: 1.3; color: var(--color-viewer-ink); cursor: pointer; }
+
+/* Strona wyłączona lub bez treści — widoczna tylko w edytorze. */
+:root:is(.osf-editor, .osf-thumbs) [data-hidden] > :not(.osf-hidden-note) { opacity: 0.35; }
+
+/* Tryb pełnoekranowy: strona dopasowana do ekranu, przewijanie strona po stronie. */
+:is(:fullscreen, :-webkit-full-screen) {
+  background-color: var(--color-night);
+}
+
+:is(:fullscreen, :-webkit-full-screen) [data-doc-viewer] {
+  scroll-snap-type: y mandatory;
+}
+
+:root.osf-sheet :is(:fullscreen, :-webkit-full-screen) .osf-doc {
+  max-width: min(100vw - 2rem, (100vh - 4.5rem) * 297 / 210);
+}
+
+:is(:fullscreen, :-webkit-full-screen) [data-doc-page] {
+  scroll-snap-align: center;
+}
+
+@media print {
+  html { background: var(--color-night); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}

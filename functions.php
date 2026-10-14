@@ -34,7 +34,43 @@ require $composer;
 Application::configure()
 	->withProviders([
 		App\Providers\ThemeServiceProvider::class,
+		App\Providers\GuesstimateServiceProvider::class,
 	])
+	/*--- GUESSTIMATE: TRASY /app/ ---*/
+	// Własna grupa `gst` zamiast `web`: logowanie i CSRF opieramy na WordPressie (cookie + nonce),
+	// bez sesji Laravela i APP_KEY.
+	->withRouting(using: function () {
+		Illuminate\Support\Facades\Route::middleware('gst')->group(base_path('routes/app.php'));
+		Illuminate\Support\Facades\Route::middleware('gst.public')->group(base_path('routes/public.php'));
+		Illuminate\Support\Facades\Route::middleware('gst.guest')->group(base_path('routes/auth.php'));
+	})
+	->withMiddleware(function ($middleware) {
+		$middleware->group('gst', [
+			App\Guesstimate\Http\Middleware\UnslashInput::class,
+			App\Guesstimate\Http\Middleware\PreventCaching::class,
+			App\Guesstimate\Http\Middleware\Authenticate::class,
+			App\Guesstimate\Http\Middleware\EnsureSchema::class,
+			App\Guesstimate\Http\Middleware\VerifyNonce::class,
+			Illuminate\Routing\Middleware\SubstituteBindings::class,
+		]);
+
+		// Publiczna oferta /offer/{token}/: bez logowania i nonce, z blokadą cache i indeksowania.
+		$middleware->group('gst.public', [
+			App\Guesstimate\Http\Middleware\PreventCaching::class,
+			App\Guesstimate\Http\Middleware\EnsureSchema::class,
+			Illuminate\Routing\Middleware\SubstituteBindings::class,
+		]);
+
+		// Ekrany logowania /login, /logout, /forgot-password, /reset-password: bez wymogu sesji, bez cache.
+		$middleware->group('gst.guest', [
+			App\Guesstimate\Http\Middleware\UnslashInput::class,
+			App\Guesstimate\Http\Middleware\PreventCaching::class,
+		]);
+
+		$middleware->alias([
+			'gst.can' => App\Guesstimate\Http\Middleware\Authorize::class,
+		]);
+	})
 	->boot();
 
 /*

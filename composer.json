@@ -4,7 +4,8 @@
   "license": "MIT",
   "description": "WordPress starter theme with a modern development workflow",
   "homepage": "https://roots.io/sage/",
-  "authors": [{
+  "authors": [
+    {
       "name": "Ben Word",
       "email": "ben@benword.com",
       "homepage": "https://github.com/retlehs"
@@ -37,6 +38,11 @@
       "App\\": "app/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
   "require": {
     "php": ">=8.2",
     "generoi/sage-woocommerce": "^1.1",
@@ -45,7 +51,8 @@
     "spatie/pdf-to-image": "^3.1"
   },
   "require-dev": {
-    "laravel/pint": "^1.20"
+    "laravel/pint": "^1.20",
+    "phpunit/phpunit": "^11.5"
   },
   "suggest": {
     "log1x/sage-directives": "A collection of useful Blade directives for WordPress and Sage (^1.0)."
@@ -60,6 +67,7 @@
   "scripts": {
     "post-autoload-dump": [
       "Roots\\Acorn\\ComposerScripts::postAutoloadDump"
-    ]
+    ],
+    "test": "phpunit"
   }
 }
