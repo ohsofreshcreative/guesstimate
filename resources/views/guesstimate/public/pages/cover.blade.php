@@ -12,18 +12,17 @@
       <h1 class="osf-t-display font-bold tracking-tight" {{ $edit('cover_heading') }}>{!! \App\Guesstimate\Document\Markup::html($doc['cover']['heading']) !!}</h1>
     </div>
   </div>
-  <div class="grid items-end gap-6 sheet:grid-cols-12">
+  <div class="grid items-end gap-6 sheet:mb-26 sheet:grid-cols-12">
     <p @class(['osf-t-lg font-bold', 'sheet:col-span-6' => ! $withMedia, 'sheet:col-span-12' => $withMedia])>
       @if ($doc['website'])<a href="https://{{ preg_replace('#^https?://#', '', $doc['website']) }}" class="underline decoration-2 underline-offset-4" rel="noopener" target="_blank">{{ $doc['website'] }}</a>@endif
     </p>
-    <div @class(['sheet:col-span-6' => ! $withMedia, 'sheet:col-span-12' => $withMedia])>
+    <div @class(['sheet:col-span-5 sheet:col-start-8' => ! $withMedia, 'sheet:col-span-12' => $withMedia])>
       @if ($offer['client'])
         <p class="osf-t-xl font-bold">oferta dla:</p>
         <p class="osf-t-xl font-bold text-orange">{{ $offer['client'] }}</p>
       @endif
-      <p class="osf-t-xs mt-2 text-paper-soft">{{ $offer['title'] }} · {{ $offer['number'] }}</p>
       @if ($doc['cover']['date'])
-        <p class="osf-t-lg mt-3 font-bold">z dnia: <span class="text-orange">{{ $doc['cover']['date'] }}</span></p>
+        <p class="osf-t-lg mt-3 font-bold sheet:mt-10">z dnia: <span class="text-orange">{{ $doc['cover']['date'] }}</span></p>
       @endif
     </div>
   </div>
