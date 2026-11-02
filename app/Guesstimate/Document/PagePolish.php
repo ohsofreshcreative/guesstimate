@@ -8,6 +8,7 @@ namespace App\Guesstimate\Document;
  */
 final class PagePolish
 {
+	/** Położenie nagłówka okładki: dodatnie = wyżej (do logo), ujemne = niżej, 0 = środek strony. */
 	public const MAX_LIFT = 100;
 
 	/** Strony z bocznym napisem. */
@@ -35,9 +36,9 @@ final class PagePolish
 		$out = [];
 
 		if ($key === 'cover' && is_numeric($polish['heading_lift'] ?? null)) {
-			$lift = max(0, min(self::MAX_LIFT, (int) $polish['heading_lift']));
+			$lift = max(-self::MAX_LIFT, min(self::MAX_LIFT, (int) $polish['heading_lift']));
 
-			if ($lift > 0) {
+			if ($lift !== 0) {
 				$out['heading_lift'] = $lift;
 			}
 		}
@@ -66,8 +67,8 @@ final class PagePolish
 			return null;
 		}
 
-		if (isset($polish['heading_lift']) && (! is_numeric($polish['heading_lift']) || $polish['heading_lift'] < 0 || $polish['heading_lift'] > self::MAX_LIFT)) {
-			return sprintf('podniesienie nagłówka poza zakresem 0–%d.', self::MAX_LIFT);
+		if (isset($polish['heading_lift']) && (! is_numeric($polish['heading_lift']) || abs((float) $polish['heading_lift']) > self::MAX_LIFT)) {
+			return sprintf('położenie nagłówka poza zakresem od -%1$d do %1$d.', self::MAX_LIFT);
 		}
 
 		foreach ((array) ($polish['image_crops'] ?? []) as $crop) {

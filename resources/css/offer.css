@@ -303,7 +303,7 @@
 /* Zdjęcie wpasowane w całości (PagePolish), także na stronach z domyślnym wypełnieniem ramki. */
 .osf-media[data-image-fit='contain'] img { object-fit: contain; }
 
-/* Podniesienie nagłówka okładki: dzieli tylko wolne miejsce, więc blok nie wejdzie na logo i nie wydłuży strony. */
+/* Położenie nagłówka okładki (--lift od -100 do 100): dzieli wolne miejsce pasa, więc blok nie wejdzie na logo i nie wydłuży strony. */
 :root.osf-sheet [data-lift] { flex-direction: column; align-items: flex-start; }
 :root.osf-sheet [data-lift]::before { content: ''; flex-grow: calc(100 - var(--lift)); min-height: 1.5cqw; }
 :root.osf-sheet [data-lift]::after { content: ''; flex-grow: calc(100 + var(--lift)); }

@@ -2,10 +2,10 @@
 <template x-if="selected === 'cover'">
   <div class="{{ $section }}" data-polish-section>
     <h3 class="font-semibold">Wygląd strony</h3>
-    <label class="mt-2 block text-sm">Podniesienie nagłówka
-      <input type="range" min="0" max="{{ \App\Guesstimate\Document\PagePolish::MAX_LIFT }}" step="5" class="block w-full" :value="polishValue('heading_lift', 0)" x-on:input="setPolish('heading_lift', Number($event.target.value))" data-polish="heading_lift">
+    <label class="mt-2 block text-sm">Położenie nagłówka
+      <input type="range" min="-{{ \App\Guesstimate\Document\PagePolish::MAX_LIFT }}" max="{{ \App\Guesstimate\Document\PagePolish::MAX_LIFT }}" step="5" class="block w-full" :value="polishValue('heading_lift', 0)" x-on:input="setPolish('heading_lift', Number($event.target.value))" data-polish="heading_lift">
     </label>
-    <p class="mt-1 text-xs text-ink-muted">0 = środek strony, 100 = tuż pod logo. Nagłówek ustawiony ręcznie w „Układ pól” zostaje na swoim miejscu. Tylko arkusz A4.</p>
+    <p class="mt-1 text-xs text-ink-muted">Od lewej: niżej, środek strony (domyślnie), tuż pod logo. Mocno obniżony nagłówek może zachodzić na „oferta dla”. Nagłówek ustawiony ręcznie w „Układ pól” zostaje na swoim miejscu. Tylko arkusz A4.</p>
   </div>
 </template>
 

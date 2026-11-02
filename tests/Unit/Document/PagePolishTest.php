@@ -45,7 +45,10 @@ class PagePolishTest extends TestCase
 	public function test_values_are_bounded(): void
 	{
 		$this->assertSame(['heading_lift' => 100], PagePolish::normalize(['heading_lift' => 900], 'cover'));
-		$this->assertNull(PagePolish::normalize(['heading_lift' => -5], 'cover'));
+		$this->assertSame(['heading_lift' => -5], PagePolish::normalize(['heading_lift' => -5], 'cover'));
+		$this->assertSame(['heading_lift' => -100], PagePolish::normalize(['heading_lift' => -900], 'cover'));
+		$this->assertNull(PagePolish::rangeError(['heading_lift' => -100]));
+		$this->assertNotNull(PagePolish::rangeError(['heading_lift' => -101]));
 		$this->assertNull(PagePolish::normalize(['heading_lift' => '1;color:red'], 'cover'));
 		$this->assertNull(PagePolish::normalize(['title_size' => 'osf-t-display', 'image_ratio' => 'x', 'image_fit' => 'fill'], 'references'));
 		$this->assertSame(4.0, PagePolish::normalize(['image_crops' => [3 => ['zoom' => 90]]], 'references')['image_crops'][3]['zoom']);
