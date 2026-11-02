@@ -2,6 +2,7 @@
 
 namespace App\Guesstimate\Clients;
 
+use App\Guesstimate\Contracts\Contract;
 use App\Guesstimate\Offers\Offer;
 use App\Guesstimate\Support\Input;
 use App\Guesstimate\Support\Validation;
@@ -91,8 +92,11 @@ class ClientService
 			$offers = Offer::withTrashed()->where('client_id', $client->id)->count();
 			$trashed = Offer::onlyTrashed()->where('client_id', $client->id)->count();
 
-			if ($offers > 0) {
-				return ['result' => 'in_use', 'client' => $client, 'offers' => $offers, 'trashed_offers' => $trashed];
+			// Oferta mogła zmienić klienta, a umowa zostaje przy tym, dla którego powstała.
+			$contracts = Contract::withTrashed()->where('client_id', $client->id)->count();
+
+			if ($offers > 0 || $contracts > 0) {
+				return ['result' => 'in_use', 'client' => $client, 'offers' => max($offers, 1), 'trashed_offers' => $trashed];
 			}
 
 			$client->forceFill(['deleted_by' => $userId])->save();

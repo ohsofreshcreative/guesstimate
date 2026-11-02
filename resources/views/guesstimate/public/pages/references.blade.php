@@ -1,4 +1,12 @@
-<div class="osf-pad osf-column sheet:pr-24">
+@php
+  // Powiększony kadr wymaga ramki przycinającej; bez kadru obraz sam jest ramką.
+  $polish = $page['polish'] ?? [];
+  $edgeLabel = empty($polish['hide_edge_label']);
+  $contain = ! empty($polish['image_fit']);
+  $frame = \App\Guesstimate\Document\PagePolish::ratioClass($polish) . ' w-full rounded-lg' . ($contain ? ' bg-night-raised' : '');
+  $imageFit = $contain ? 'object-contain' : 'object-cover';
+@endphp
+<div class="osf-pad osf-column{{ $edgeLabel ? ' sheet:pr-24' : '' }}">
   <img src="{{ $logo }}" alt="OhSoFresh Creative" class="osf-logo self-start">
   <div class="osf-center">
   @include('guesstimate.public.partials.heading', ['page' => $page, 'edit' => $edit, 'class' => 'mt-5'])
@@ -10,13 +18,13 @@
       @foreach ($doc['references']['items'] as $ref)
         <article class="min-w-0">
           @if ($ref['image'])
-            <img src="{{ $ref['image']['url'] }}" @if ($ref['image']['srcset']) srcset="{{ $ref['image']['srcset'] }}" sizes="(min-width: 768px) 400px, 100vw" @endif
+            {!! empty($ref['image_crop']) ? '' : '<div class="' . e($frame) . ' overflow-hidden">' !!}<img src="{{ $ref['image']['url'] }}" @if ($ref['image']['srcset']) srcset="{{ $ref['image']['srcset'] }}" sizes="(min-width: 768px) 400px, 100vw" @endif
               width="{{ $ref['image']['width'] }}" height="{{ $ref['image']['height'] }}" alt="{{ $ref['image']['alt'] ?: 'Realizacja: ' . $ref['name'] }}"
-              loading="lazy" decoding="async" class="aspect-video w-full rounded-lg object-cover">
+              loading="lazy" decoding="async" class="{{ empty($ref['image_crop']) ? $frame : 'size-full' }} {{ $imageFit }}"@if (! empty($ref['image_crop'])) style="{{ \App\Guesstimate\Document\ImageCrop::style($ref['image_crop']) }}"@endif>{!! empty($ref['image_crop']) ? '' : '</div>' !!}
           @else
-            <div class="flex aspect-video w-full items-center justify-center rounded-lg bg-night-raised"><span class="osf-t-lg font-bold text-paper-soft">{{ $ref['name'] }}</span></div>
+            <div class="flex {{ \App\Guesstimate\Document\PagePolish::ratioClass($polish) }} w-full items-center justify-center rounded-lg bg-night-raised"><span class="osf-t-lg font-bold text-paper-soft">{{ $ref['name'] }}</span></div>
           @endif
-          <h3 class="osf-t-sm mt-3 font-bold text-paper-soft">{{ $ref['name'] }}</h3>
+          <h3 class="{{ \App\Guesstimate\Document\PagePolish::titleClass($polish) }} mt-3 font-bold text-paper-soft">{{ $ref['name'] }}</h3>
           <dl class="mt-2 space-y-2">
             @foreach ($ref['metrics'] as $metric)
               <div>
@@ -38,4 +46,5 @@
   </div>
   </div>
 </div>
-<p class="osf-edge-label" aria-hidden="true">W kooperacji siła</p>
+@if ($edgeLabel)<p class="osf-edge-label" aria-hidden="true">W kooperacji siła</p>@endif
+

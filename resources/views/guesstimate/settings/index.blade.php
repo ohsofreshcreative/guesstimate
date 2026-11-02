@@ -27,6 +27,10 @@
     @include('guesstimate.settings.partials.document')
   @endif
 
+  @if ($section === 'wykonawca')
+    @include('guesstimate.settings.partials.contractor')
+  @endif
+
   @if ($section === 'tla')
     @include('guesstimate.settings.partials.backgrounds')
   @endif

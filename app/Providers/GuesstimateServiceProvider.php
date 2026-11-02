@@ -9,6 +9,7 @@ use App\Guesstimate\Document\MediaRefs;
 use App\Guesstimate\Console\ClickUpCommand;
 use App\Guesstimate\Integrations\ClickUp\ClickUpScheduler;
 use App\Guesstimate\Integrations\ClickUp\ClickUpSync;
+use App\Guesstimate\Media\MediaLibrary;
 use App\Guesstimate\Offers\OfferPolicy;
 use App\Guesstimate\Settings\SettingsRepository;
 use Illuminate\Support\ServiceProvider;
@@ -42,6 +43,7 @@ class GuesstimateServiceProvider extends ServiceProvider
 		// Załączniki używane w opublikowanych ofertach nie mogą zniknąć z biblioteki mediów.
 		add_filter('pre_delete_attachment', [MediaRefs::class, 'guardDelete'], 10, 2);
 		add_filter('attachment_fields_to_edit', [MediaRefs::class, 'describe'], 10, 2);
+		add_action('init', [MediaLibrary::class, 'register']);
 
 		// Synchronizacja firm z ClickUp: partie (WP-Cron per użytkownik) + harmonogram co 15 min
 		// (systemowy cron → `wp guesstimate clickup sync-due`, rezerwowo WP-Cron co 5 min).

@@ -13,6 +13,11 @@
       <path d="M14 3.5V8h4.5" />
       <path d="M8.5 12.5h7M8.5 16h4.5" />
       @break
+    @case('library')
+      <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+      <circle cx="8.5" cy="9.5" r="1.75" />
+      <path d="m3.5 16.5 5-4.5 4 3.5 3-2.5 5 4" />
+      @break
     @case('clients')
       <path d="M4 20.5V6a1.5 1.5 0 0 1 1.5-1.5h7A1.5 1.5 0 0 1 14 6v14.5" />
       <path d="M14 10h4.5a1.5 1.5 0 0 1 1.5 1.5v9" />
@@ -32,6 +37,12 @@
     @case('settings')
       <path d="M12 8.75a3.25 3.25 0 1 0 0 6.5 3.25 3.25 0 0 0 0-6.5Z" />
       <path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.5-2-3.5-2.4 1a7.5 7.5 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.5 7.5 0 0 0 7 6.5l-2.4-1-2 3.5 2 1.5a7.6 7.6 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a7.5 7.5 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.5 7.5 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5Z" />
+      @break
+    @case('contracts')
+      <path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" />
+      @break
+    @case('templates')
+      <path d="M4 4h16v6H4zM4 14h7v6H4zM15 14h5v6h-5z" />
       @break
     @case('plus')
       <path d="M12 5v14M5 12h14" />

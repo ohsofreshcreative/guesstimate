@@ -2,6 +2,7 @@
 
 namespace App\Guesstimate\Offers;
 
+use App\Guesstimate\Contracts\Contract;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -63,6 +64,13 @@ class TrashService
 		}
 
 		return DB::transaction(function () use ($offer) {
+			// Umowa to dokument z własnym dziennikiem: kasowanie oferty nie może jej zabrać. Blokada wyklucza wyścig z ContractService::create().
+			Offer::onlyTrashed()->whereKey($offer->id)->lockForUpdate()->first();
+
+			if (Contract::withTrashed()->where('offer_id', $offer->id)->exists()) {
+				throw new InvalidArgumentException('Tej oferty nie można usunąć na stałe, bo ma umowy.');
+			}
+
 			$versionIds = DB::table('gst_offer_versions')->where('offer_id', $offer->id)->pluck('id')->all();
 			$counts = [];
 

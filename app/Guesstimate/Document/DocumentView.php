@@ -30,6 +30,12 @@ final class DocumentView
 		$page['layout'] = Pages::layout($key, $page['layout'] ?? null);
 		$page['image'] = Pages::hasMedia($page['layout']) ? ($page['image'] ?? null) : null;
 		$page['hidden'] ??= null;
+		$fields = FieldLayout::normalize($page['fields'] ?? null, $key);
+		unset($page['fields']);
+
+		if ($fields) {
+			$page['fields'] = $fields;
+		}
 
 		if (! isset($page['heading'])) {
 			$page['heading'] = Markup::parts(Pages::HEADINGS[$key] ?? '');

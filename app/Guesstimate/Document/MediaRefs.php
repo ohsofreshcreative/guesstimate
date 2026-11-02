@@ -2,8 +2,10 @@
 
 namespace App\Guesstimate\Document;
 
+use App\Guesstimate\Media\MediaUsage;
 use App\Guesstimate\Offers\Publication;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 use WP_Post;
 
@@ -12,8 +14,8 @@ use WP_Post;
  *
  * Snapshot publikacji zapisuje adresy plików, więc zmiana tytułu, opisu czy przycięcie obrazu w WordPressie
  * (nowy plik) nie zmienia opublikowanej oferty. Jedyne ryzyko to usunięcie załącznika — WordPress kasuje
- * wtedy pliki. Dlatego załącznika używanego w publikacji nie da się usunąć (filtr pre_delete_attachment);
- * pliki nie są kopiowane. Referencje znikają razem z publikacjami (trwałe usunięcie oferty).
+ * wtedy pliki. Dlatego używanego załącznika nie da się usunąć (filtr pre_delete_attachment, użycia liczy
+ * MediaUsage); pliki nie są kopiowane. Referencje znikają razem z publikacjami (trwałe usunięcie oferty).
  */
 final class MediaRefs
 {
@@ -82,9 +84,19 @@ final class MediaRefs
 		}
 
 		try {
-			return self::offersUsing($post->ID) ? false : $delete;
+			return MediaUsage::inUse(MediaUsage::forAttachment($post->ID)) ? false : $delete;
 		} catch (Throwable) {
-			return $delete; // brak tabeli (migracja nie wykonana) — nie blokujemy biblioteki mediów
+			// Bez tabel (migracja nie wykonana) nie blokujemy biblioteki mediów; przy innym błędzie plik zostaje.
+			return self::installed() ? false : $delete;
+		}
+	}
+
+	private static function installed(): bool
+	{
+		try {
+			return Schema::hasTable(self::TABLE);
+		} catch (Throwable) {
+			return false;
 		}
 	}
 
@@ -94,16 +106,16 @@ final class MediaRefs
 	public static function describe(array $fields, $post): array
 	{
 		try {
-			$numbers = $post instanceof WP_Post ? self::offersUsing($post->ID) : [];
+			$summary = $post instanceof WP_Post ? MediaUsage::summary(MediaUsage::forAttachment($post->ID)) : '';
 		} catch (Throwable) {
-			$numbers = [];
+			$summary = '';
 		}
 
-		if ($numbers) {
+		if ($summary !== '') {
 			$fields['gst_media_refs'] = [
 				'label' => 'Guesstimate',
 				'input' => 'html',
-				'html' => esc_html(sprintf('Używany w opublikowanych ofertach: %s. Nie można go usunąć, dopóki te publikacje istnieją.', implode(', ', array_slice($numbers, 0, 10)))),
+				'html' => esc_html(sprintf('Tego pliku nie można usunąć — %s.', $summary)),
 			];
 		}
 

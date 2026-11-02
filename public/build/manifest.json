@@ -1,4 +1,8 @@
 {
+  "_field-layout-CbvmDp75.js": {
+    "file": "assets/field-layout-CbvmDp75.js",
+    "name": "field-layout"
+  },
   "_module.esm-Dwt2H7Ds.js": {
     "file": "assets/module.esm-Dwt2H7Ds.js",
     "name": "module.esm"
@@ -21,6 +25,10 @@
     "file": "assets/pagination-ZQCciRw_.css",
     "src": "_pagination-ZQCciRw_.css"
   },
+  "_preload-helper-DPvXr7gF.js": {
+    "file": "assets/preload-helper-DPvXr7gF.js",
+    "name": "preload-helper"
+  },
   "_swiper-BdM3zUQW.js": {
     "file": "assets/swiper-BdM3zUQW.js",
     "name": "swiper",
@@ -37,7 +45,7 @@
     "src": "editor.deps.json"
   },
   "resources/css/app.css": {
-    "file": "assets/app-6hroGERD.css",
+    "file": "assets/app-UrDlySVT.css",
     "name": "app",
     "names": [
       "app.css"
@@ -53,7 +61,7 @@
     ]
   },
   "resources/css/editor.css": {
-    "file": "assets/editor-DBdc1-JL.css",
+    "file": "assets/editor-Ix-nGkyh.css",
     "name": "editor",
     "names": [
       "editor.css"
@@ -69,7 +77,7 @@
     ]
   },
   "resources/css/guesstimate.css": {
-    "file": "assets/guesstimate-Dda89a9a.css",
+    "file": "assets/guesstimate-DleyuKVe.css",
     "name": "guesstimate",
     "names": [
       "guesstimate.css"
@@ -78,7 +86,7 @@
     "isEntry": true
   },
   "resources/css/offer.css": {
-    "file": "assets/offer-DB5AqhMB.css",
+    "file": "assets/offer-DwDzZgDV.css",
     "name": "offer",
     "names": [
       "offer.css"
@@ -123,12 +131,13 @@
     "src": "resources/images/pointer.svg"
   },
   "resources/js/app.js": {
-    "file": "assets/app-iCa2x6nT.js",
+    "file": "assets/app-CoLMEJn4.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
     "imports": [
-      "_module.esm-Dwt2H7Ds.js"
+      "_module.esm-Dwt2H7Ds.js",
+      "_preload-helper-DPvXr7gF.js"
     ],
     "dynamicImports": [
       "resources/js/blocks/reviews.js",
@@ -279,18 +288,34 @@
     "isEntry": true
   },
   "resources/js/guesstimate.js": {
-    "file": "assets/guesstimate-BIAsCXmR.js",
+    "file": "assets/guesstimate-AmPpnJDr.js",
     "name": "guesstimate",
     "src": "resources/js/guesstimate.js",
     "isEntry": true,
     "imports": [
-      "_module.esm-Dwt2H7Ds.js"
+      "_module.esm-Dwt2H7Ds.js",
+      "_field-layout-CbvmDp75.js"
+    ]
+  },
+  "resources/js/guesstimate/field-stage.js": {
+    "file": "assets/field-stage-DpRwAGmD.js",
+    "name": "field-stage",
+    "src": "resources/js/guesstimate/field-stage.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_field-layout-CbvmDp75.js"
     ]
   },
   "resources/js/offer.js": {
-    "file": "assets/offer-Kfi-pMTL.js",
+    "file": "assets/offer-B2iKkhK2.js",
     "name": "offer",
     "src": "resources/js/offer.js",
-    "isEntry": true
+    "isEntry": true,
+    "imports": [
+      "_preload-helper-DPvXr7gF.js"
+    ],
+    "dynamicImports": [
+      "resources/js/guesstimate/field-stage.js"
+    ]
   }
 }

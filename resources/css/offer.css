@@ -6,6 +6,7 @@
 
 @source '../views/guesstimate/public';
 @source '../js/offer.js';
+@source '../../app/Guesstimate/Document/PagePolish.php';
 
 /* Arkusz A4: strony skalowane proporcjonalnie (desktop, edytor, miniatury). Klasę ustawia skrypt w <head>. */
 @custom-variant sheet (&:where(.osf-sheet, .osf-sheet *));
@@ -299,6 +300,38 @@
   :root.osf-sheet .osf-media-left & { width: 58%; margin-left: 42%; }
 }
 
+/* Zdjęcie wpasowane w całości (PagePolish), także na stronach z domyślnym wypełnieniem ramki. */
+.osf-media[data-image-fit='contain'] img { object-fit: contain; }
+
+/* Podniesienie nagłówka okładki: dzieli tylko wolne miejsce, więc blok nie wejdzie na logo i nie wydłuży strony. */
+:root.osf-sheet [data-lift] { flex-direction: column; align-items: flex-start; }
+:root.osf-sheet [data-lift]::before { content: ''; flex-grow: calc(100 - var(--lift)); min-height: 1.5cqw; }
+:root.osf-sheet [data-lift]::after { content: ''; flex-grow: calc(100 + var(--lift)); }
+
+/* Pola z układu (FieldLayout): tylko na arkuszu, pozycja w procentach strony. Wysokość jest minimalna, więc treść
+   nie jest ucinana; układ płynny zostaje przy kolejności z szablonu. Wartości w cqw, a pion liczony od wysokości A4,
+   a nie bieżącej strony: strona wydłużona przez nadmiar treści nie może przesuwać pól w dół. */
+:root.osf-sheet [data-free] .osf-content { position: static; }
+
+:root.osf-sheet [data-free] [data-field] {
+  position: absolute;
+  left: calc(var(--field-x) * 1cqw);
+  top: calc(var(--field-y) * 1cqw * 210 / 297);
+  z-index: var(--field-z);
+  width: calc(var(--field-w) * 1cqw);
+  min-height: calc(var(--field-h) * 1cqw * 210 / 297);
+  margin: 0;
+  text-align: var(--field-align);
+}
+
+/* Miejsce nagłówka wyjętego z przepływu: treść strony zostaje tam, gdzie była w szablonie. */
+.osf-field-spacer { display: none; }
+:root.osf-sheet .osf-field-spacer { display: block; visibility: hidden; }
+
+/* Kopie pól: w układzie płynnym tekst na końcu strony, na arkuszu tylko pozycja z układu. */
+.osf-copies { padding: 0 20px 28px; }
+:root.osf-sheet .osf-copies { padding: 0; }
+
 /* Układ płynny: kolejność zdjęcia względem treści. */
 .osf-media-right, .osf-media-left { display: flex; flex-direction: column; }
 .osf-media-right > .osf-media { order: 1; max-height: 24rem; }
@@ -348,6 +381,48 @@
 :root.osf-editor [data-overflow] { box-shadow: 0 0 0 3px var(--color-flame), var(--shadow-page); }
 :root.osf-editor a { pointer-events: none; }
 
+/* Układ pól: ramka zaznaczenia z uchwytami, siatka. Pojedyncze kliknięcie nie zaznacza tekstu; po dwukliku (tryb tekstu)
+   ramka przepuszcza wskaźnik, a zaznaczanie działa jak zwykle. */
+:root.osf-editor [data-edit] { user-select: none; }
+:root.osf-editor [data-edit][data-selected] { cursor: move; outline: none; }
+:root.osf-editor [data-edit][data-selected][data-locked] { cursor: not-allowed; }
+:root.osf-editor[data-text-mode] [data-edit][data-selected] { cursor: text; user-select: text; }
+
+.osf-selection { position: absolute; z-index: 100; outline: 2px solid var(--color-orange); pointer-events: none; }
+.osf-selection[data-locked] { outline-style: dashed; }
+:root[data-text-mode] .osf-selection { outline-style: dotted; }
+:root[data-text-mode] .osf-selection [data-handle] { display: none; }
+
+.osf-selection [data-handle] {
+  position: absolute;
+  left: var(--handle-x);
+  top: var(--handle-y);
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-orange);
+  background-color: var(--color-paper);
+  pointer-events: auto;
+  touch-action: none;
+  transform: translate(-50%, -50%);
+}
+
+.osf-selection [data-handle='nw'], .osf-selection [data-handle='se'] { cursor: nwse-resize; }
+.osf-selection [data-handle='ne'], .osf-selection [data-handle='sw'] { cursor: nesw-resize; }
+.osf-selection [data-handle='n'], .osf-selection [data-handle='s'] { cursor: ns-resize; }
+.osf-selection [data-handle='e'], .osf-selection [data-handle='w'] { cursor: ew-resize; }
+
+:root.osf-show-grid [data-doc-page][data-current]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 99;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--color-paper) 22%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--color-paper) 22%, transparent) 1px, transparent 1px);
+  background-size: 10% 10%;
+}
+
 /* Miniatury: wszystkie strony w kolumnie (proporcje i treść jak na arkuszu). */
 :root.osf-thumbs, :root.osf-thumbs body { background-color: var(--color-paper); background-image: none; }
 :root.osf-thumbs .osf-doc { max-width: none; padding: 0.5rem; gap: 0.25rem; }
@@ -377,8 +452,15 @@
   scroll-snap-align: center;
 }
 
+/* Wydruk: zawsze arkusze A4 poziomo, jeden na stronę papieru (offer.js wymusza arkusz także na wąskim ekranie). */
 @media print {
+  @page { size: A4 landscape; margin: 0; }
   html { background: var(--color-night); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  [data-doc-viewer] { min-height: 0; padding: 0; background: none; }
+  [data-doc-viewer] > nav, [data-doc-viewer] > p { display: none; }
+  .osf-doc, :root.osf-sheet .osf-doc { display: block; width: 297mm; max-width: none; margin: 0; padding: 0; }
+  [data-doc-page] { width: 297mm; border-radius: 0; box-shadow: none; break-after: page; break-inside: avoid; }
+  [data-doc-page]:last-child { break-after: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,7 +1,10 @@
-@php $withMedia = $page['layout'] === 'text_image'; @endphp
+@php
+  $withMedia = $page['layout'] === 'text_image';
+  $lift = (int) ($page['polish']['heading_lift'] ?? 0);
+@endphp
 <div class="osf-pad flex flex-1 flex-col">
   <img src="{{ $logo }}" alt="OhSoFresh Creative" class="osf-logo self-start">
-  <div class="flex flex-1 items-center py-8 sheet:py-0">
+  <div class="flex flex-1 items-center py-8 sheet:py-0"@if ($lift) data-lift style="--lift:{{ $lift }}"@endif>
     <div @class(['sheet:w-8/12' => ! $withMedia, 'w-full' => $withMedia])>
       @if ($doc['cover']['lead'] || $editor)
         <p @class(['osf-t-sm mb-4 max-w-md text-paper sheet:mb-5', 'sheet:pl-14' => ! $withMedia]) {{ $edit('cover_lead') }}>{{ $doc['cover']['lead'] ?: ($editor ? 'Krótki opis na okładce' : '') }}</p>

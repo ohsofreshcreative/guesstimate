@@ -3,6 +3,8 @@
 namespace App\Guesstimate\Http\Controllers;
 
 use App\Guesstimate\Ai\AiService;
+use App\Guesstimate\Clients\Nip;
+use App\Guesstimate\Contracts\ContractSnapshot;
 use App\Guesstimate\Document\Background;
 use App\Guesstimate\Document\CaseStudy;
 use App\Guesstimate\Document\DocumentForm;
@@ -40,6 +42,7 @@ class SettingsController extends Controller
 		'kalkulacja' => 'Kalkulacja i rodzaje projektu',
 		'ogolne' => 'Waluta, zaokrąglenia i numeracja',
 		'dokument' => 'Dokument oferty',
+		'wykonawca' => 'Dane wykonawcy',
 		'tla' => 'Biblioteka teł',
 		'realizacje' => 'Realizacje',
 		'integracje' => 'Integracje',
@@ -87,6 +90,7 @@ class SettingsController extends Controller
 			'ogolne' => $this->saveGeneral($request),
 			'integracje' => $this->saveIntegrations($request),
 			'dokument' => $this->saveDocument($request),
+			'wykonawca' => $this->saveContractor($request),
 		};
 
 		if ($errors) {
@@ -229,6 +233,31 @@ class SettingsController extends Controller
 			$this->settings->set('stages', $stages);
 			$this->settings->set('default_calc_model', $model);
 			$this->settings->set('content_stage', $contentStage);
+		}
+
+		return $errors;
+	}
+
+	/** Dane firmy do umów. Istniejące umowy mają własną kopię i zmieniają ją tylko przez świadome odświeżenie. */
+	private function saveContractor(Request $request): array
+	{
+		$errors = [];
+		$data = [];
+
+		foreach (ContractSnapshot::CONTRACTOR_FIELDS as $field) {
+			$data[$field] = (string) Input::line($request->input("contractor.{$field}"));
+
+			if (mb_strlen($data[$field]) > 255) {
+				$errors["contractor.{$field}"] = 'Najwyżej 255 znaków.';
+			}
+		}
+
+		if ($data['nip'] !== '' && ! Nip::isValid($data['nip'])) {
+			$errors['contractor.nip'] = 'Podaj poprawny NIP.';
+		}
+
+		if (! $errors) {
+			$this->settings->set('contractor', $data);
 		}
 
 		return $errors;

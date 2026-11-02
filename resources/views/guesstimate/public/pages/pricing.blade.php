@@ -1,4 +1,5 @@
-<div class="osf-pad osf-column sheet:pr-24">
+@php $edgeLabel = empty($page['polish']['hide_edge_label']); @endphp
+<div class="osf-pad osf-column{{ $edgeLabel ? ' sheet:pr-24' : '' }}">
   <img src="{{ $logo }}" alt="OhSoFresh Creative" class="osf-logo self-start">
   {{-- Nagłówek, opis, zestawienie cen, suma i „Cena zawiera” = jedna grupa wyśrodkowana w pionie. --}}
   <div class="osf-center">
@@ -50,4 +51,5 @@
     <p class="osf-t-xs mt-6 text-right text-paper-soft sheet:absolute sheet:bottom-6 sheet:right-10">Oferta ważna {{ $doc['validity_days'] }} dni</p>
   @endif
 </div>
-<p class="osf-edge-label" aria-hidden="true">Wariant cenowy</p>
+@if ($edgeLabel)<p class="osf-edge-label" aria-hidden="true">Wariant cenowy</p>@endif
+

@@ -16,6 +16,8 @@
     $slot = \App\Guesstimate\Document\Pages::hasMedia($page['layout']);
     $media = $slot && $page['image'];
     $side = $page['layout'] === 'image_text' ? 'left' : 'right';
+    // Szablony oznaczają pola przez $edit, więc pozycja z układu trafia tam bez zmian w szablonach stron.
+    $place = fn (string $field) => new \Illuminate\Support\HtmlString(trim($edit($field) . ' ' . \App\Guesstimate\Document\FieldLayout::attributes($page['fields'] ?? null, $field)));
   @endphp
   <section id="page-{{ $page['key'] }}"
     @class(['osf-page', 'osf-layout-' . $page['layout'], 'osf-media-' . $side => $media])
@@ -23,7 +25,7 @@
     @if (in_array($page['key'], \App\Guesstimate\Document\Pages::FIT, true)) data-fit data-fit-level="0" @endif
     @if ($editor && $page['hidden']) data-hidden="{{ $page['hidden'] }}" @endif
     {{ $edit('background') }}
-    aria-label="{{ $page['label'] }}">
+    aria-label="{{ $page['label'] }}"@if (! empty($page['fields'])) data-free @endif>
     <div class="osf-page-bg" aria-hidden="true">
       @if ($page['background'])
         <img src="{{ $page['background']['url'] }}"
@@ -39,18 +41,19 @@
     </div>
 
     @if ($media)
-      <figure class="osf-media" {{ $edit('image') }}>
+      <figure class="osf-media"@if (! empty($page['polish']['image_fit'])) data-image-fit="contain"@endif {{ $edit('image') }}>
         <img src="{{ $page['image']['url'] }}"
           @if ($page['image']['srcset']) srcset="{{ $page['image']['srcset'] }}" sizes="(min-width: 1180px) 600px, 100vw" @endif
           width="{{ $page['image']['width'] }}" height="{{ $page['image']['height'] }}"
-          alt="{{ $page['image']['alt'] }}" loading="{{ $i < 2 || $editor ? 'eager' : 'lazy' }}" decoding="async">
+          alt="{{ $page['image']['alt'] }}" loading="{{ $i < 2 || $editor ? 'eager' : 'lazy' }}" decoding="async"
+          @if (! empty($page['image_crop'])) style="{{ \App\Guesstimate\Document\ImageCrop::style($page['image_crop']) }}" @endif>
       </figure>
     @elseif ($slot && $editor)
       <span class="osf-media-add osf-t-xs" {{ $edit('image') }}>+ Zdjęcie strony</span>
     @endif
 
     <div class="osf-content">
-      @include('guesstimate.public.pages.' . str_replace('_', '-', $page['key']), ['offer' => $offer, 'doc' => $doc, 'page' => $page, 'logo' => $logo, 'chevrons' => $chevrons, 'edit' => $edit, 'editor' => $editor])
+      @include('guesstimate.public.pages.' . str_replace('_', '-', $page['key']), ['offer' => $offer, 'doc' => $doc, 'page' => $page, 'logo' => $logo, 'chevrons' => $chevrons, 'edit' => $place, 'editor' => $editor])@includeWhen(! empty($page['fields']), 'guesstimate.public.partials.field-copies', ['fields' => $page['fields'] ?? null, 'place' => $place])
     </div>
 
     @if ($editor && $page['hidden'])

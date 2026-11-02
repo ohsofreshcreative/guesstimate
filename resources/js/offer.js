@@ -17,11 +17,17 @@ let pages = [];
 let current = 0;
 let selectedKey = null;
 let selectedField = null;
+let stage = null; // układ pól: tylko w edytorze, moduł ładowany osobno (oferta klienta go nie pobiera)
+let queuedHtml = null;
+let printing = false;
 
-const isSheet = () => mode !== 'public' || sheetQuery.matches;
+const isSheet = () => mode !== 'public' || printing || sheetQuery.matches;
 // offsetHeight/clientWidth to wymiary układu (bez transformacji) — pomiar nie zależy od powiększenia.
 const idealHeight = (page) => (page.clientWidth * 210) / 297;
-const overflows = (page) => page.offsetHeight > idealHeight(page) + 2;
+// Pola z układu są pozycjonowane absolutnie, więc nie rozpychają strony: liczy się też dolna krawędź najniższego pola.
+const fieldsBottom = (page) => Math.max(0, ...Array.from(page.querySelectorAll('[data-field]'), (el) => el.offsetTop + el.offsetHeight));
+const pageHeight = (page) => Math.max(page.offsetHeight, fieldsBottom(page));
+const overflows = (page) => pageHeight(page) > idealHeight(page) + 2;
 
 /* Strona „Sytuacja”: kolejne poziomy zmniejszają odstępy, interlinię i (na końcu) tekst. */
 function fit(page) {
@@ -34,7 +40,14 @@ function fit(page) {
   }
   const overflow = overflows(page);
   if (overflow) page.dataset.overflow = '1';
-  return { level, overflow, ratio: overflow ? idealHeight(page) / page.offsetHeight : 1 };
+  return { level, overflow, ratio: overflow ? idealHeight(page) / pageHeight(page) : 1 };
+}
+
+/* Pole, które nadal nie mieści się na arkuszu, wydłuża stronę (jak za długi element w szablonie) — bez ucinania. */
+function contain(page) {
+  if (!isSheet() || !overflows(page)) return;
+  page.style.minHeight = `${pageHeight(page)}px`;
+  page.dataset.overflow = '1';
 }
 
 /* Przenosi końcowe elementy treści (lub elementy list/siatek) na nową stronę, dopóki strona się mieści. */
@@ -47,6 +60,7 @@ function paginate(page, depth = 0) {
   next.removeAttribute('id');
   next.dataset.continued = '1';
   next.removeAttribute('data-edit');
+  next.querySelectorAll('[data-field-copy]').forEach((el) => el.remove()); // kopia pola należy do strony, nie do jej ciągu dalszego
   const nextBody = next.querySelector('[data-flow-body]');
   const title = next.querySelector('[data-flow-title]');
   if (title && !title.dataset.cd) {
@@ -93,7 +107,7 @@ function paginate(page, depth = 0) {
 const report = {};
 
 function layout() {
-  if (mode === 'public') root.classList.toggle('osf-sheet', sheetQuery.matches);
+  if (mode === 'public') root.classList.toggle('osf-sheet', isSheet());
   // W edytorze widać jedną stronę — na czas pomiaru pokazujemy wszystkie (ukryte nie mają wysokości).
   root.classList.add('osf-measuring');
 
@@ -101,6 +115,10 @@ function layout() {
   main.querySelectorAll('[data-continued]').forEach((el) => el.remove());
   originals.forEach(({ page, html }) => { page.innerHTML = html; });
   Object.keys(report).forEach((key) => delete report[key]);
+  main.querySelectorAll('[data-free]').forEach((page) => {
+    page.style.removeProperty('min-height');
+    page.removeAttribute('data-overflow');
+  });
 
   main.querySelectorAll('[data-doc-page]').forEach((page) => {
     if (page.hasAttribute('data-fit')) {
@@ -110,6 +128,9 @@ function layout() {
       paginate(page);
     }
   });
+
+  main.querySelectorAll('[data-free]').forEach(contain);
+  report.layout = { pages: [...new Set(Array.from(main.querySelectorAll('[data-free][data-overflow]'), (page) => page.dataset.pageKey))] };
 
   pages = Array.from(main.querySelectorAll('[data-doc-page]'));
   pages.forEach((page, i) => page.setAttribute('aria-label', `${page.dataset.pageLabel} — strona ${i + 1} z ${pages.length}`));
@@ -208,6 +229,7 @@ function markCurrent() {
       target?.setAttribute('data-selected', '');
     });
   }
+  stage?.paint(selectedKey, selectedField);
 }
 
 function summary() {
@@ -224,6 +246,11 @@ function summary() {
 window.gstDoc = {
   /** Podmienia strony (HTML z serwera) bez przeładowania ramki: style i fonty zostają. */
   render(html) {
+    // Podmiana stron w trakcie przeciągania zgubiłaby przeciągany element.
+    if (stage?.busy()) {
+      queuedHtml = html;
+      return summary();
+    }
     const y = window.scrollY;
     main.innerHTML = html;
     capture();
@@ -243,6 +270,17 @@ window.gstDoc = {
   setWidth(px) {
     root.style.setProperty('--page-w', `${Math.round(px)}px`);
   },
+  configure(options) { stage?.configure(options); },
+  measure(key) { return stage ? stage.measure(key) : []; },
+  /** Pozycje pól wszystkich stron; strony poza wybraną są ukryte i bez tej klasy nie mają wymiarów. */
+  measureAll() {
+    if (!stage) return {};
+    root.classList.add('osf-measuring');
+    const result = stage.measureAll();
+    root.classList.remove('osf-measuring');
+    return result;
+  },
+  fieldText(key, field) { return stage ? stage.text(key, field) : ''; },
   summary,
 };
 
@@ -260,8 +298,10 @@ function editorEvents() {
       post({ type: 'select', page: page.dataset.pageKey });
       return;
     }
+    if (stage?.consumeClick(event)) return;
     const target = event.target.closest('[data-edit]');
-    post({ type: 'edit', page: page.dataset.pageKey, field: target ? target.dataset.edit : 'background' });
+    // Pole z układu: kliknięcie tylko zaznacza, żeby klawisze strzałek działały na polu, a nie w panelu.
+    post({ type: 'edit', page: page.dataset.pageKey, field: target ? target.dataset.edit : 'background', focus: !stage?.movable(target) });
   });
 }
 
@@ -270,7 +310,20 @@ function editorEvents() {
 if (viewer && main) {
   capture();
 
-  const start = () => {
+  const start = async () => {
+    if (mode === 'editor') {
+      const { createFieldStage } = await import('./guesstimate/field-stage.js');
+      stage = createFieldStage({
+        main,
+        post,
+        settled() {
+          if (queuedHtml === null) return;
+          const html = queuedHtml;
+          queuedHtml = null;
+          window.gstDoc.render(html);
+        },
+      });
+    }
     if (mode !== 'public') {
       selectedKey = pages[0]?.dataset.pageKey || main.querySelector('[data-doc-page]')?.dataset.pageKey;
     }
@@ -296,6 +349,19 @@ if (viewer && main) {
       lastWidth = window.innerWidth;
       clearTimeout(timer);
       timer = setTimeout(layout, 250);
+    });
+
+    // Na wąskim ekranie układ płynny nie zmieściłby się na arkuszu: przed drukiem przechodzimy na strony A4.
+    window.addEventListener('beforeprint', () => {
+      main.querySelectorAll('img[loading="lazy"]').forEach((img) => { img.loading = 'eager'; });
+      if (sheetQuery.matches) return;
+      printing = true;
+      layout();
+    });
+    window.addEventListener('afterprint', () => {
+      if (!printing) return;
+      printing = false;
+      layout();
     });
 
     prev?.addEventListener('click', () => go(current - 1));

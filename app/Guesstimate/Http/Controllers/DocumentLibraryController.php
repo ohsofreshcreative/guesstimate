@@ -5,6 +5,7 @@ namespace App\Guesstimate\Http\Controllers;
 use App\Guesstimate\Document\Background;
 use App\Guesstimate\Document\CaseStudy;
 use App\Guesstimate\Document\Media;
+use App\Guesstimate\Media\MediaUsage;
 use App\Guesstimate\Support\Input;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -95,9 +96,11 @@ class DocumentLibraryController extends Controller
 		$stillUsed = Background::where('attachment_id', $attachment)->exists();
 
 		if ($deleteFile && ! $stillUsed) {
-			// Plik używany w opublikowanych ofertach chroni MediaRefs (snapshot wskazuje ten plik).
-			if ($numbers = \App\Guesstimate\Document\MediaRefs::offersUsing($attachment)) {
-				return $this->redirectWith($back, sprintf('Usunięto tło „%s” z biblioteki Guesstimate. Pliku nie usunięto — jest używany w opublikowanych ofertach: %s.', $name, implode(', ', array_slice($numbers, 0, 5))));
+			// Używanego pliku nie da się usunąć (MediaRefs::guardDelete) — snapshoty i wersje ofert wskazują ten plik.
+			$usage = MediaUsage::forAttachment($attachment);
+
+			if (MediaUsage::inUse($usage)) {
+				return $this->redirectWith($back, sprintf('Usunięto tło „%s” z biblioteki Guesstimate. Pliku nie usunięto — %s.', $name, MediaUsage::summary($usage)));
 			}
 
 			wp_delete_attachment($attachment, true);
@@ -110,11 +113,11 @@ class DocumentLibraryController extends Controller
 
 	public static function usage(Background $background): array
 	{
-		$pattern = '"background_id":' . $background->id . '[,}]';
+		$id = (string) $background->id;
 
 		return [
-			'published' => DB::table('gst_publications')->whereNull('withdrawn_at')->where('snapshot', 'regexp', $pattern)->distinct()->count('offer_id'),
-			'drafts' => DB::table('gst_offer_versions')->whereNull('locked_at')->where('document', 'regexp', $pattern)->count(),
+			'published' => DB::table('gst_publications')->whereNull('withdrawn_at')->whereRaw("JSON_CONTAINS(JSON_EXTRACT(snapshot, '$.document.pages[*].background_id'), ?)", [$id])->distinct()->count('offer_id'),
+			'drafts' => DB::table('gst_offer_versions')->whereNull('locked_at')->whereRaw("JSON_CONTAINS(JSON_EXTRACT(document, '$.pages.*.background_id'), ?)", [$id])->count(),
 		];
 	}
 

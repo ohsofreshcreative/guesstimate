@@ -103,6 +103,18 @@ final class DocumentForm
 			'contact_user_id' => $contactId ?: null,
 		]);
 
+		// Tylko gdy formularz zna tę opcję: krok 5 kreatora jej nie wysyła i nie może jej skasować.
+		if (array_key_exists('layout_mode', $input)) {
+			$mode = $input['layout_mode'];
+			unset($data['layout_mode']);
+
+			if ($mode === DocumentSettings::MODE_TEMPLATE) {
+				$data['layout_mode'] = $mode;
+			} elseif ($mode !== null && $mode !== '') {
+				$errors['layout_mode'] = 'Nieznany tryb układu.';
+			}
+		}
+
 		return ['data' => $errors ? null : $data, 'draft' => $data, 'errors' => $errors];
 	}
 
@@ -160,8 +172,37 @@ final class DocumentForm
 				if ($id !== null && $id !== ($pages[$key]['image_id'] ?? null) && ! Media::isImage($id)) {
 					$errors["pages.{$key}.image_id"] = sprintf('%s: wybierz obraz JPG, PNG lub WebP z biblioteki mediów.', $label);
 				} else {
+					// Kadr dotyczy konkretnego zdjęcia: przy zmianie wraca do domyślnego, chyba że formularz podał nowy.
+					if ($id !== ($page['image_id'] ?? null)) {
+						$page['image_crop'] = null;
+					}
+
 					$page['image_id'] = $id;
 				}
+			}
+
+			if (array_key_exists('image_crop', $row)) {
+				if ($error = ImageCrop::rangeError($row['image_crop'])) {
+					$errors["pages.{$key}.image_crop"] = sprintf('%s: %s', $label, $error);
+				}
+
+				$page['image_crop'] = empty($page['image_id']) ? null : ImageCrop::normalize($row['image_crop']);
+			}
+
+			if (array_key_exists('fields', $row)) {
+				if ($problems = FieldLayout::rangeErrors($row['fields'], $key)) {
+					$errors["pages.{$key}.fields"] = sprintf('%s: %s', $label, $problems[0]);
+				}
+
+				$page['fields'] = FieldLayout::normalize($row['fields'], $key);
+			}
+
+			if (array_key_exists('polish', $row)) {
+				if ($error = PagePolish::rangeError($row['polish'])) {
+					$errors["pages.{$key}.polish"] = sprintf('%s: %s', $label, $error);
+				}
+
+				$page['polish'] = PagePolish::normalize($row['polish'], $key, array_map('intval', (array) ($current['reference_ids'] ?? [])));
 			}
 
 			if (array_key_exists('heading', $row) && $key !== 'cover') {

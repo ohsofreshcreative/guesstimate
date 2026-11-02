@@ -34,17 +34,19 @@ final class DocumentBuilder
 
 		$references = CaseStudy::whereIn('id', $doc['reference_ids'] ?: [0])->get()->keyBy('id');
 		$referenceItems = [];
+		$referenceCrops = PagePolish::normalize($doc['pages']['references']['polish'] ?? null, 'references')['image_crops'] ?? [];
 
 		foreach ($doc['reference_ids'] as $id) {
 			if ($ref = $references->get($id)) {
+				$image = Media::image($ref->attachment_id, 'large');
 				$referenceItems[] = [
 					'name' => $ref->client_name,
 					'url' => $ref->url,
 					'url_label' => $ref->url ? preg_replace('#^https?://#i', '', rtrim($ref->url, '/')) : null,
 					'description' => $ref->description,
 					'metrics' => array_slice(array_values(array_filter((array) $ref->metrics, fn ($m) => ($m['value'] ?? '') !== '')), 0, CaseStudy::MAX_METRICS),
-					'image' => Media::image($ref->attachment_id, 'large'),
-				];
+					'image' => $image,
+				] + ($image && isset($referenceCrops[$id]) ? ['image_crop' => $referenceCrops[$id]] : []);
 			}
 		}
 
@@ -76,6 +78,16 @@ final class DocumentBuilder
 
 			$background = $page['background_id'] ? $backgrounds->get($page['background_id']) : null;
 			$layout = Pages::layout($key, $page['layout'] ?? null);
+			$image = Pages::hasMedia($layout) && ! empty($page['image_id']) ? Media::image((int) $page['image_id'], 'large') : null;
+			$crop = $image ? ImageCrop::normalize($page['image_crop'] ?? null) : null;
+			$fields = DocumentSettings::activeFields($doc, $key);
+			$polish = (array) PagePolish::normalize($page['polish'] ?? null, $key);
+			unset($polish['image_crops']); // w snapshocie kadr należy do realizacji
+
+			if (! $image && $key !== 'references') {
+				unset($polish['image_fit']);
+			}
+
 			$pages[] = [
 				'key' => $key,
 				'label' => $label,
@@ -85,10 +97,11 @@ final class DocumentBuilder
 				'layout' => $layout,
 				// Zdjęcie strony: adresy i wymiary zapisane w snapshocie — późniejsze zmiany w bibliotece mediów
 				// nie zmieniają opublikowanej oferty.
-				'image' => Pages::hasMedia($layout) && ! empty($page['image_id']) ? Media::image((int) $page['image_id'], 'large') : null,
+				'image' => $image,
 				'heading' => self::heading($key, $page['heading'] ?? null, $version),
 				'hidden' => $hidden,
-			];
+				// Klucze tylko przy ustawionych wartościach: inaczej każda aktywna publikacja wyglądałaby na nieaktualną.
+			] + ($crop ? ['image_crop' => $crop] : []) + ($fields ? ['fields' => $fields] : []) + ($polish ? ['polish' => $polish] : []);
 		}
 
 		$logoId = (int) ($global['logo_attachment_id'] ?? 0);

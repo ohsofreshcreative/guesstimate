@@ -16,7 +16,7 @@ final class Roles
 	public const MANAGER = 'gst_manager';
 	public const EMPLOYEE = 'gst_employee';
 
-	public const VERSION = 3;
+	public const VERSION = 5;
 	public const VERSION_OPTION = 'gst_roles_version';
 
 	/** Uprawnienia WordPressa: przesyłanie zdjęć stron oferty do biblioteki mediów (edytor dokumentu). */
@@ -41,7 +41,10 @@ final class Roles
 					Capabilities::EDIT_ALL_OFFERS,
 					Capabilities::CREATE_CLIENTS,
 					Capabilities::MANAGE_CLIENTS,
+					Capabilities::MANAGE_MEDIA,
 					Capabilities::MANAGE_TRASH,
+					Capabilities::APPROVE_CONTRACTS,
+					Capabilities::MANAGE_CONTRACT_TEMPLATES,
 				],
 				'wordpress' => self::MEDIA,
 			],

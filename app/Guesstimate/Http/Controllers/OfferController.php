@@ -3,6 +3,8 @@
 namespace App\Guesstimate\Http\Controllers;
 
 use App\Guesstimate\Clients\Client;
+use App\Guesstimate\Contracts\Contract;
+use App\Guesstimate\Contracts\ContractPolicy;
 use App\Guesstimate\Offers\Offer;
 use App\Guesstimate\Offers\OfferPolicy;
 use App\Guesstimate\Offers\OfferQuery;
@@ -16,6 +18,7 @@ use App\Guesstimate\Offers\PublicationStatus;
 use App\Guesstimate\Support\Format;
 use App\Guesstimate\Support\Input;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 
 /**
@@ -64,6 +67,7 @@ class OfferController extends Controller
 			'isCurrent' => $version->id === $offer->current_version_id,
 			'summary' => OfferSummary::version($version),
 			'publication' => $offer->currentVersion->isBudget() ? $this->publications->panel($offer) : null,
+			'contracts' => Schema::hasTable('gst_contracts') ? app(ContractPolicy::class)->scope(Contract::where('offer_id', $offer->id))->with('currentVersion')->orderByDesc('id')->get() : null,
 			'versions' => OfferSummary::versions($offer),
 			'events' => OfferSummary::events($offer),
 			'canEdit' => $this->policy->canEdit($offer),

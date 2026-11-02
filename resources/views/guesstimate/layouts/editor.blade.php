@@ -14,6 +14,19 @@
     </x-gst.alert>
   @endif
   @yield('content')
+  {{-- Nad układem, bo pełnoekranowy edytor nie ma miejsca na pasek, który przesuwałby treść. --}}
+  @if ($flash)
+    <div class="fixed bottom-4 right-4 z-50 max-w-md space-y-2">
+      @foreach ($flash as $message)
+        <x-gst.alert :type="$message['type']" x-data="{ show: true }" x-show="show" class="shadow-overlay">
+          <div class="flex items-start justify-between gap-4">
+            <span>{{ $message['message'] }}</span>
+            <button type="button" class="shrink-0 opacity-70 hover:opacity-100" x-on:click="show = false"><x-gst.icon name="close" /><span class="sr-only">Zamknij</span></button>
+          </div>
+        </x-gst.alert>
+      @endforeach
+    </div>
+  @endif
 </body>
 
 </html>

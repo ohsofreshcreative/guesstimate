@@ -72,6 +72,10 @@
 
   @include('guesstimate.offers.partials.details', ['summary' => $summary])
 
+  @if ($contracts !== null)
+    @include('guesstimate.offers.partials.contracts')
+  @endif
+
   <div class="mt-6 grid gap-6 xl:grid-cols-2">
     <section class="min-w-0 rounded-panel border border-line bg-surface shadow-panel" aria-labelledby="gst-versions">
       <h2 id="gst-versions" class="border-b border-line px-5 py-3 font-semibold">Wersje</h2>

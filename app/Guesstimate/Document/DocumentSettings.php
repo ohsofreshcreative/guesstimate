@@ -10,6 +10,9 @@ use App\Guesstimate\Offers\OfferVersion;
  */
 final class DocumentSettings
 {
+	/** Stary układ: strony z szablonu. Brak klucza `layout_mode` = układ pól tam, gdzie go zapisano. */
+	public const MODE_TEMPLATE = 'template';
+
 	/**
 	 * @param  array  $settings  ustawienia globalne (SettingsRepository::all())
 	 */
@@ -79,12 +82,43 @@ final class DocumentSettings
 	{
 		$page = $doc['pages'][$key] ?? [];
 
-		return md5(wp_json_encode([
+		$state = [
 			$content['situation'] ?? '',
 			$page['heading'] ?? null,
 			Pages::layout($key, $page['layout'] ?? null),
 			$page['image_id'] ?? null,
-		]));
+		];
+
+		// Tylko gdy układ istnieje: dotychczasowe pomiary zachowują ważność. Przez normalize(): MySQL zmienia kolejność
+		// kluczy i typy liczb w JSON, więc surowy układ dałby inny skrót przed zapisem i po odczycie.
+		if ($fields = self::activeFields($doc, $key)) {
+			$state[] = $fields;
+		}
+
+		return md5(wp_json_encode($state));
+	}
+
+	/**
+	 * Układ pól strony, który obowiązuje w tym dokumencie. Tryb szablonu ignoruje zapisane pozycje, ale ich nie usuwa,
+	 * więc powrót do nowego układu nic nie traci.
+	 */
+	public static function activeFields(array $doc, string $key): ?array
+	{
+		return ($doc['layout_mode'] ?? null) === self::MODE_TEMPLATE ? null : FieldLayout::normalize($doc['pages'][$key]['fields'] ?? null, $key);
+	}
+
+	/**
+	 * Skrót stanu, od którego zależy pomiar pól układu (czy mieszczą się na stronie).
+	 */
+	public static function layoutHash(array $doc, array $content): string
+	{
+		$fields = [];
+
+		foreach (array_keys(Pages::TYPES) as $key) {
+			$fields[$key] = self::activeFields($doc, $key);
+		}
+
+		return md5(wp_json_encode([$content, $fields]));
 	}
 
 	/**

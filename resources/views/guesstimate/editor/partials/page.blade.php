@@ -36,6 +36,8 @@
   </template>
 </div>
 
+@include('guesstimate.editor.partials.fields')
+
 {{-- Teksty --}}
 <div class="{{ $section }} space-y-4">
   <h3 class="font-semibold">Teksty</h3>
@@ -246,7 +248,30 @@
     <button type="button" class="{{ $ghost }} text-danger" x-show="pageState.image_id" x-on:click="removeImage()" data-image-remove>Usuń zdjęcie</button>
   </div>
   <p class="mt-1 text-xs text-danger" x-text="fieldError(`document.pages.${selected}.image_id`)"></p>
+  <template x-if="pageState.image_id && editable">
+    <div class="mt-3 space-y-2 text-sm" data-image-crop>
+      <p class="font-medium">Kadr <span class="font-normal text-ink-muted">(plik pozostaje bez zmian)</span></p>
+      <label class="block">W poziomie
+        <input type="range" min="0" max="100" step="1" class="block w-full" :value="cropValue('x')" x-on:input="setCrop('x', $event.target.value)">
+      </label>
+      <label class="block">W pionie
+        <input type="range" min="0" max="100" step="1" class="block w-full" :value="cropValue('y')" x-on:input="setCrop('y', $event.target.value)">
+      </label>
+      <label class="block">Powiększenie
+        <input type="range" min="1" max="4" step="0.05" class="block w-full" :value="cropValue('zoom')" x-on:input="setCrop('zoom', $event.target.value)">
+      </label>
+      <button type="button" class="{{ $ghost }}" x-show="pageState.image_crop" x-on:click="pageState.image_crop = null">Przywróć pełny kadr</button>
+      <label class="block">Dopasowanie
+        <select class="{{ $input }}" :value="polishValue('image_fit')" x-on:change="setPolish('image_fit', $event.target.value)" data-polish="image_fit">
+          <option value="">Wypełnij ramkę</option>
+          <option value="contain">Pokaż całe zdjęcie</option>
+        </select>
+      </label>
+    </div>
+  </template>
 </div>
+
+@include('guesstimate.editor.partials.polish')
 
 {{-- Tło strony --}}
 <div class="{{ $section }}" {!! $field('background') !!}>

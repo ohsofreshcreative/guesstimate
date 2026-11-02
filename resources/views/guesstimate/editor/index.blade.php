@@ -26,6 +26,7 @@
 <div class="flex h-full flex-col" x-data="documentEditor(@js($config))"
   x-on:message.window="receive($event)"
   x-on:resize.window.debounce.150ms="applyZoom()"
+  x-on:keydown.window="windowKey($event)"
   x-on:beforeunload.window="if (dirty) { $event.preventDefault(); $event.returnValue = '' }">
 
   {{-- Pasek górny --}}
@@ -63,17 +64,20 @@
       <span class="text-sm" aria-live="polite" data-editor-status>
         <span x-show="saving" class="text-ink-muted">Zapisywanie…</span>
         <span x-show="! saving && dirty" class="font-medium text-risk-mid">Niezapisane zmiany</span>
-        <span x-show="! saving && ! dirty && editable" class="text-ink-muted">Zapisano</span>
+        <span x-show="! saving && ! dirty && editable" class="text-ink-muted" x-text="autosaved ? 'Zapisano automatycznie' : 'Zapisano'"></span>
       </span>
+      <span class="text-sm text-danger" x-show="autosaveError" x-text="autosaveError" x-cloak role="status" data-autosave-error></span>
       <button type="button" class="rounded-full bg-danger-soft px-2.5 py-1 text-xs font-medium text-danger" x-show="overflow" x-cloak x-on:click="select('situation', 'situation')" data-overflow-badge>Tekst nie mieści się na stronie</button>
+      <button type="button" class="rounded-full bg-danger-soft px-2.5 py-1 text-xs font-medium text-danger" x-show="fieldOverflow.length && ! overflow" x-cloak x-on:click="select(fieldOverflow[0])" data-field-overflow-badge>Pole wychodzi poza stronę</button>
       @if ($config['editable'])
+        <label class="flex items-center gap-1.5 text-sm text-ink-soft"><input type="checkbox" class="size-4 rounded border-line-strong text-accent focus:ring-accent" x-model="autosave" x-on:change="scheduleAutosave()" data-autosave>Autozapis</label>
         <button type="button" class="{{ $primary }}" x-on:click="save()" :disabled="saving || ! dirty" data-editor-save>Zapisz</button>
       @endif
       <a href="{{ $publication['preview_url'] }}" target="_blank" rel="noopener" class="{{ $secondary }}">Podgląd klienta</a>
       @if ($canEdit)
         <form method="post" action="{{ route('gst.offers.publish', $offer) }}" x-on:submit="if (! canPublish) { $event.preventDefault(); return } publishing = true" data-publish-form>
           <x-gst.csrf /><input type="hidden" name="back" value="{{ $back }}"><input type="hidden" name="after" value="summary">
-          <button type="submit" class="{{ $primary }}" :disabled="! canPublish" :aria-busy="publishing" :title="dirty ? 'Najpierw zapisz zmiany' : (overflow ? 'Strona „Sytuacja” nie mieści się na A4' : '')" data-editor-publish>
+          <button type="submit" class="{{ $primary }}" :disabled="! canPublish" :aria-busy="publishing" :title="dirty ? 'Najpierw zapisz zmiany' : (overflow ? 'Strona „Sytuacja” nie mieści się na A4' : (fieldOverflow.length ? 'Pole wychodzi poza stronę' : ''))" data-editor-publish>
             {{ $published ? 'Opublikuj nową wersję' : 'Opublikuj' }}
           </button>
         </form>
@@ -124,6 +128,7 @@
         <div x-show="tab === 'page'">
           @include('guesstimate.editor.partials.lock')
           <fieldset @disabled(! $config['editable']) class="min-w-0">
+            @include('guesstimate.editor.partials.layout-mode')
             @include('guesstimate.editor.partials.page')
           </fieldset>
         </div>

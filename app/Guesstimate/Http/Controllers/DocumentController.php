@@ -5,6 +5,8 @@ namespace App\Guesstimate\Http\Controllers;
 use App\Guesstimate\Document\DocumentEditor;
 use App\Guesstimate\Document\DocumentSettings;
 use App\Guesstimate\Document\Media;
+use App\Guesstimate\Document\Pages;
+use App\Guesstimate\Media\MediaLibrary;
 use App\Guesstimate\Offers\Offer;
 use App\Guesstimate\Offers\OfferPolicy;
 use App\Guesstimate\Offers\OfferService;
@@ -146,7 +148,10 @@ class DocumentController extends Controller
 	{
 		abort_unless(current_user_can(\App\Guesstimate\Auth\Capabilities::CREATE_OFFERS), 403);
 
-		return response()->json(Media::browse((string) $request->query('q', ''), (int) $request->query('page', 1)));
+		// Wybór w edytorze nigdy nie pokazuje archiwum.
+		$filters = ['archived' => false] + MediaLibrary::filters((array) $request->query());
+
+		return response()->json(Media::browse((string) $request->query('q', ''), (int) $request->query('page', 1), 30, $filters));
 	}
 
 	/**
@@ -186,12 +191,17 @@ class DocumentController extends Controller
 			return (array) ($document['fit_report'] ?? []);
 		}
 
-		return ['situation' => [
+		$content = \App\Guesstimate\Offers\OfferContent::normalize($content);
+		$report = ['situation' => [
 			'overflow' => ! empty($fit['situation']['overflow']),
 			'level' => max(0, min(9, (int) ($fit['situation']['level'] ?? 0))),
-			'hash' => DocumentSettings::fitHash($document, \App\Guesstimate\Offers\OfferContent::normalize($content)),
+			'hash' => DocumentSettings::fitHash($document, $content),
 			'measured_at' => now()->toIso8601String(),
 		]];
+		$pages = array_values(array_intersect(array_keys(Pages::TYPES), (array) ($fit['layout']['pages'] ?? [])));
+
+		// Klucz tylko przy przepełnieniu: dokumenty bez układu pól zachowują dotychczasowy raport.
+		return $pages ? $report + ['layout' => ['pages' => $pages, 'hash' => DocumentSettings::layoutHash($document, $content)]] : $report;
 	}
 
 	private function status(Offer $offer): array
@@ -202,6 +212,7 @@ class DocumentController extends Controller
 		return [
 			'state' => DocumentEditor::state($version, $this->settings->all()),
 			'fitReport' => DocumentSettings::forVersion($version, $this->settings->all())['fit_report']['situation'] ?? null,
+			'fieldReport' => DocumentSettings::forVersion($version, $this->settings->all())['fit_report']['layout']['pages'] ?? [],
 			'outdated' => $panel['publication']['outdated'],
 			'blockers' => $panel['blockers'],
 			'message' => 'Zapisano zmiany w wersji roboczej.',

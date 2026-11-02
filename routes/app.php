@@ -18,8 +18,11 @@ use App\Guesstimate\Http\Controllers\ClientController;
 use App\Guesstimate\Http\Controllers\ClientLookupController;
 use App\Guesstimate\Http\Controllers\DashboardController;
 use App\Guesstimate\Http\Controllers\DocumentController;
+use App\Guesstimate\Http\Controllers\ContractController;
+use App\Guesstimate\Http\Controllers\ContractTemplateController;
 use App\Guesstimate\Http\Controllers\DocumentLibraryController;
 use App\Guesstimate\Http\Controllers\FeatureController;
+use App\Guesstimate\Http\Controllers\MediaLibraryController;
 use App\Guesstimate\Http\Controllers\OfferController;
 use App\Guesstimate\Http\Controllers\PublicationController;
 use App\Guesstimate\Http\Controllers\SettingsController;
@@ -63,6 +66,23 @@ Route::prefix('app')->name('gst.')->group(function () {
 	Route::post('oferty/{offer}/wycofaj', [PublicationController::class, 'withdraw'])->whereNumber('offer')->name('offers.withdraw');
 	Route::post('oferty/{offer}/przywroc-publikacje', [PublicationController::class, 'restore'])->whereNumber('offer')->name('offers.restore');
 
+	/*--- BIBLIOTEKA GRAFIK (wspólna; zmiany w pliku sprawdza MediaPolicy) ---*/
+	Route::middleware('gst.can:' . Capabilities::CREATE_OFFERS)->group(function () {
+		Route::get('biblioteka', [MediaLibraryController::class, 'index'])->name('library.index');
+		Route::get('biblioteka/pliki', [MediaLibraryController::class, 'items'])->name('library.items');
+		Route::post('biblioteka/pliki', [MediaLibraryController::class, 'store'])->name('library.store');
+		Route::get('biblioteka/pliki/{image}', [MediaLibraryController::class, 'show'])->whereNumber('image')->name('library.show');
+		Route::post('biblioteka/pliki/{image}', [MediaLibraryController::class, 'update'])->whereNumber('image')->name('library.update');
+		Route::post('biblioteka/pliki/{image}/usun', [MediaLibraryController::class, 'destroy'])->whereNumber('image')->name('library.destroy');
+		Route::post('biblioteka/pliki/{image}/przywroc', [MediaLibraryController::class, 'restore'])->whereNumber('image')->name('library.restore');
+	});
+
+	Route::middleware('gst.can:' . Capabilities::MANAGE_MEDIA)->group(function () {
+		Route::post('biblioteka/foldery', [MediaLibraryController::class, 'storeFolder'])->name('library.folders.store');
+		Route::post('biblioteka/foldery/{folder}', [MediaLibraryController::class, 'updateFolder'])->whereNumber('folder')->name('library.folders.update');
+		Route::post('biblioteka/foldery/{folder}/usun', [MediaLibraryController::class, 'destroyFolder'])->whereNumber('folder')->name('library.folders.destroy');
+	});
+
 	/*--- ASYSTENT AI (tylko propozycje, bez zapisu) ---*/
 	Route::post('oferty/{offer}/ai/estymacja', [AiController::class, 'estimate'])->whereNumber('offer')->name('ai.estimate');
 	Route::post('oferty/{offer}/ai/tresci', [AiController::class, 'content'])->whereNumber('offer')->name('ai.content');
@@ -93,6 +113,32 @@ Route::prefix('app')->name('gst.')->group(function () {
 		Route::post('klienci/{client}', [ClientController::class, 'update'])->whereNumber('client')->name('clients.update');
 		Route::post('klienci/{client}/usun', [ClientController::class, 'destroy'])->whereNumber('client')->name('clients.destroy');
 		Route::post('klienci/{client}/przywroc', [ClientController::class, 'restore'])->whereNumber('client')->name('clients.restore');
+	});
+
+	/*--- SZABLONY UMÓW ---*/
+	Route::middleware('gst.can:' . Capabilities::CREATE_OFFERS)->group(function () {
+		Route::get('oferty/{offer}/umowy/nowa', [ContractController::class, 'create'])->whereNumber('offer')->name('contracts.create');
+		Route::post('oferty/{offer}/umowy', [ContractController::class, 'store'])->whereNumber('offer')->name('contracts.store');
+		Route::get('umowy', [ContractController::class, 'index'])->name('contracts.index');
+		Route::get('umowy/{contract}', [ContractController::class, 'show'])->whereNumber('contract')->name('contracts.show');
+		Route::get('umowy/{contract}/platnosci', [ContractController::class, 'payments'])->whereNumber('contract')->name('contracts.payments');
+		Route::post('umowy/{contract}/platnosci', [ContractController::class, 'savePayments'])->whereNumber('contract')->name('contracts.payments.save');
+		Route::get('umowy/{contract}/eksport/{format}', [ContractController::class, 'export'])->whereNumber('contract')->whereIn('format', ['pdf', 'docx'])->name('contracts.export');
+		Route::post('umowy/{contract}/wartosci', [ContractController::class, 'saveValues'])->whereNumber('contract')->name('contracts.values');
+		Route::post('umowy/{contract}/zatwierdz', [ContractController::class, 'approve'])->whereNumber('contract')->name('contracts.approve');
+		Route::post('umowy/{contract}/odswiez', [ContractController::class, 'refresh'])->whereNumber('contract')->name('contracts.refresh');
+	});
+
+	Route::middleware('gst.can:' . Capabilities::MANAGE_CONTRACT_TEMPLATES)->group(function () {
+		Route::get('szablony-umow', [ContractTemplateController::class, 'index'])->name('contract-templates.index');
+		Route::post('szablony-umow', [ContractTemplateController::class, 'store'])->name('contract-templates.store');
+		Route::post('szablony-umow/import', [ContractTemplateController::class, 'import'])->name('contract-templates.import');
+		Route::get('szablony-umow/{template}', [ContractTemplateController::class, 'edit'])->whereNumber('template')->name('contract-templates.edit');
+		Route::post('szablony-umow/{template}', [ContractTemplateController::class, 'save'])->whereNumber('template')->name('contract-templates.save');
+		Route::post('szablony-umow/{template}/zatwierdz', [ContractTemplateController::class, 'approve'])->whereNumber('template')->name('contract-templates.approve');
+		Route::post('szablony-umow/{template}/nowa-wersja', [ContractTemplateController::class, 'newVersion'])->whereNumber('template')->name('contract-templates.new-version');
+		Route::post('szablony-umow/{template}/kopia', [ContractTemplateController::class, 'duplicate'])->whereNumber('template')->name('contract-templates.duplicate');
+		Route::post('szablony-umow/{template}/archiwizuj', [ContractTemplateController::class, 'archive'])->whereNumber('template')->name('contract-templates.archive');
 	});
 
 	/*--- BIBLIOTEKA FUNKCJONALNOŚCI ---*/

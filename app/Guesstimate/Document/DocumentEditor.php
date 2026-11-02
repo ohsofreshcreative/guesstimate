@@ -4,6 +4,7 @@ namespace App\Guesstimate\Document;
 
 use App\Guesstimate\Ai\AiService;
 use App\Guesstimate\Auth\Capabilities;
+use App\Guesstimate\Media\MediaLibrary;
 use App\Guesstimate\Offers\Offer;
 use App\Guesstimate\Offers\OfferContent;
 use App\Guesstimate\Offers\OfferPolicy;
@@ -44,6 +45,7 @@ final class DocumentEditor
 		$doc['include_features'] = ! empty($doc['include_features']);
 		$doc['reference_ids'] = array_map('intval', (array) $doc['reference_ids']);
 		$doc['contact_user_id'] = $doc['contact_user_id'] ? (int) $doc['contact_user_id'] : null;
+		$doc['layout_mode'] ??= null;
 
 		foreach ($doc['pages'] as $key => $page) {
 			$doc['pages'][$key] = [
@@ -52,6 +54,9 @@ final class DocumentEditor
 				'fit' => $page['fit'],
 				'layout' => Pages::layout($key, $page['layout']),
 				'image_id' => $page['image_id'] ? (int) $page['image_id'] : null,
+				'image_crop' => ImageCrop::normalize($page['image_crop'] ?? null),
+				'fields' => FieldLayout::normalize($page['fields'] ?? null, $key),
+				'polish' => PagePolish::normalize($page['polish'] ?? null, $key),
 				'heading' => $page['heading'] ?? null,
 			];
 		}
@@ -137,6 +142,13 @@ final class DocumentEditor
 				'state' => $state,
 				'pages' => $pages,
 				'library' => DocumentDesigner::library(),
+				'folders' => MediaLibrary::tree(MediaLibrary::folders()),
+				'versionId' => $version->id,
+				'layout' => [
+					'fields' => FieldLayout::FIELDS,
+					'labels' => FieldLayout::LABELS,
+					'maxCopies' => FieldLayout::MAX_COPIES,
+				],
 				'fits' => Background::FITS,
 				// Miniatury wybranych zdjęć (pozostałe edytor pobiera z biblioteki mediów na żądanie).
 				'images' => collect($imageIds)->mapWithKeys(fn ($id) => [$id => self::imageCard((int) $id)])->all(),
@@ -150,6 +162,7 @@ final class DocumentEditor
 				'ai' => AiService::status($settings),
 				'canUpload' => current_user_can('upload_files'),
 				'fitReport' => DocumentSettings::forVersion($version, $all)['fit_report']['situation'] ?? null,
+				'fieldReport' => DocumentSettings::forVersion($version, $all)['fit_report']['layout']['pages'] ?? [],
 				'urls' => [
 					'frame' => route('gst.offers.document.frame', $offer),
 					'preview' => route('gst.offers.document.preview', $offer),

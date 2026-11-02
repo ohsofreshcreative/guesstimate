@@ -29,12 +29,33 @@ final class Modules
 				'capability' => Capabilities::ACCESS_APP,
 				'description' => 'Archiwum wycen z wersjami, statusami i historią zmian.',
 			],
+			'library' => [
+				'label' => 'Biblioteka',
+				'route' => 'gst.library.index',
+				'icon' => 'library',
+				'capability' => Capabilities::CREATE_OFFERS,
+				'description' => 'Wspólne grafiki do ofert: foldery, tagi, opisy i miejsca użycia.',
+			],
 			'clients' => [
 				'label' => 'Klienci',
 				'route' => 'gst.clients.index',
 				'icon' => 'clients',
 				'capability' => Capabilities::MANAGE_CLIENTS,
 				'description' => 'Firmy, osoby kontaktowe i historia przygotowanych dla nich wycen.',
+			],
+			'contracts' => [
+				'label' => 'Umowy',
+				'route' => 'gst.contracts.index',
+				'icon' => 'contracts',
+				'capability' => Capabilities::CREATE_OFFERS,
+				'description' => 'Umowy przygotowane z ofert: szkice, zatwierdzone wersje i pobieranie.',
+			],
+			'contract_templates' => [
+				'label' => 'Szablony umów',
+				'route' => 'gst.contract-templates.index',
+				'icon' => 'templates',
+				'capability' => Capabilities::MANAGE_CONTRACT_TEMPLATES,
+				'description' => 'Wzory umów z wersjami i zatwierdzaniem, pisane w prostym edytorze.',
 			],
 			'features' => [
 				'label' => 'Funkcjonalności',

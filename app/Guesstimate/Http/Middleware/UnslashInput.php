@@ -15,7 +15,12 @@ class UnslashInput
 	public function handle(Request $request, Closure $next): Response
 	{
 		$request->query->replace(wp_unslash($request->query->all()));
-		$request->request->replace(wp_unslash($request->request->all()));
+
+		// Przy JSON worek `request` zawiera dane z treści żądania, do których WordPress nic nie dodaje.
+		// Usunięcie ukośników zmieniałoby tekst, np. `C:\plik` w umowie.
+		if (! $request->isJson()) {
+			$request->request->replace(wp_unslash($request->request->all()));
+		}
 
 		return $next($request);
 	}

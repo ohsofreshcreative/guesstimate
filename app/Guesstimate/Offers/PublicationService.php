@@ -3,6 +3,7 @@
 namespace App\Guesstimate\Offers;
 
 use App\Guesstimate\Document\DocumentSettings;
+use App\Guesstimate\Document\Pages;
 use App\Guesstimate\Document\MediaRefs;
 use App\Guesstimate\Http\Controllers\OfferController;
 use App\Guesstimate\Settings\SettingsRepository;
@@ -48,6 +49,10 @@ class PublicationService
 			if (self::situationOverflows($version)) {
 				$blockers[] = 'Strona „Jak rozumiemy Twoją sytuację?” nie mieści się na jednej stronie A4. Skróć tekst w edytorze dokumentu (np. „Dopasuj tekst do strony z AI”) albo zmień układ na pełną szerokość.';
 			}
+
+			if ($pages = self::fieldsOverflow($version)) {
+				$blockers[] = 'Pola wychodzą poza stronę: ' . implode(', ', $pages) . '. Przesuń je albo zmień ich rozmiar w edytorze dokumentu.';
+			}
 		}
 
 		return $blockers;
@@ -64,6 +69,23 @@ class PublicationService
 
 		return is_array($report) && ! empty($report['overflow'])
 			&& ($report['hash'] ?? '') === DocumentSettings::fitHash($doc, OfferContent::normalize($version->content));
+	}
+
+	/**
+	 * Pomiar z edytora: nazwy stron, na których pole układu wychodzi poza arkusz. Ważny tylko dla mierzonego stanu.
+	 *
+	 * @return list<string>
+	 */
+	public static function fieldsOverflow(OfferVersion $version): array
+	{
+		$doc = DocumentSettings::forVersion($version, app(SettingsRepository::class)->all());
+		$report = $doc['fit_report']['layout'] ?? null;
+
+		if (! is_array($report) || ($report['hash'] ?? '') !== DocumentSettings::layoutHash($doc, OfferContent::normalize($version->content))) {
+			return [];
+		}
+
+		return array_values(array_intersect_key(Pages::TYPES, array_flip((array) ($report['pages'] ?? []))));
 	}
 
 	/**

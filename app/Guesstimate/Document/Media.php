@@ -2,6 +2,9 @@
 
 namespace App\Guesstimate\Document;
 
+use App\Guesstimate\Media\MediaAttributes;
+use App\Guesstimate\Media\MediaLibrary;
+
 /**
  * Obsługa grafik przez bibliotekę mediów WordPressa (bez własnego magazynu plików).
  */
@@ -9,6 +12,8 @@ final class Media
 {
 	public const MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 	public const MAX_BYTES = 15 * 1024 * 1024;
+	/** Limit rozdzielczości: większe obrazy mogą wyczerpać pamięć przy generowaniu rozmiarów. */
+	public const MAX_PIXELS = 50_000_000;
 
 	/** Proporcje strony dokumentu: A4 poziomo (297 × 210 mm). */
 	public const RATIO = 297 / 210;
@@ -23,9 +28,19 @@ final class Media
 	}
 
 	/**
-	 * Przesyła plik z pola formularza do biblioteki mediów. Zwraca [ID załącznika | null, błąd | null].
+	 * Najwyższy dopuszczalny rozmiar pliku: limit aplikacji albo niższy limit serwera (PHP).
+	 */
+	public static function maxBytes(): int
+	{
+		$server = (int) wp_max_upload_size();
+
+		return $server > 0 ? min(self::MAX_BYTES, $server) : self::MAX_BYTES;
+	}
+
+	/**
+	 * Przesyła plik z pola formularza do biblioteki mediów. Zwraca [ID załącznika | null, błąd | null, czy to duplikat].
 	 *
-	 * @return array{0: int|null, 1: string|null}
+	 * @return array{0: int|null, 1: string|null, 2?: bool}
 	 */
 	public static function upload(string $field): array
 	{
@@ -41,14 +56,29 @@ final class Media
 				: 'Nie udało się przesłać pliku.'];
 		}
 
-		if ($file['size'] > self::MAX_BYTES) {
-			return [null, 'Plik może mieć najwyżej 15 MB.'];
+		if ($file['size'] > self::maxBytes()) {
+			return [null, sprintf('Plik może mieć najwyżej %d MB.', floor(self::maxBytes() / 1024 / 1024))];
 		}
 
 		$check = wp_check_filetype_and_ext($file['tmp_name'], $file['name']);
 
 		if (! in_array($check['type'] ?? '', self::MIMES, true)) {
 			return [null, 'Obsługiwane formaty: JPG, PNG i WebP.'];
+		}
+
+		$dimensions = @getimagesize($file['tmp_name']);
+
+		if ($dimensions && $dimensions[0] * $dimensions[1] > self::MAX_PIXELS) {
+			return [null, 'Obraz ma zbyt dużą rozdzielczość (limit 50 megapikseli).'];
+		}
+
+		// Ten sam plik przesłany ponownie wskazuje istniejący załącznik (także zarchiwizowany) zamiast tworzyć kopię.
+		$hash = hash_file('sha256', $file['tmp_name']);
+
+		if ($existing = MediaLibrary::findDuplicate($hash)) {
+			MediaLibrary::restore($existing);
+
+			return [$existing, null, true];
 		}
 
 		require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -60,6 +90,8 @@ final class Media
 		if (is_wp_error($id)) {
 			return [null, 'Biblioteka mediów odrzuciła plik: ' . $id->get_error_message()];
 		}
+
+		update_post_meta((int) $id, MediaAttributes::META_HASH, $hash);
 
 		return [(int) $id, null];
 	}
@@ -118,11 +150,12 @@ final class Media
 	/**
 	 * Obrazy z biblioteki mediów do wyboru w edytorze (najnowsze, z wyszukiwaniem i stronicowaniem).
 	 *
-	 * @return array{items: list<array{id: int, name: string, thumb: string|null, width: int|null, height: int|null}>, more: bool}
+	 * @param  array{folder?: int|null, tags?: list<int>, archived?: bool}  $filters  MediaLibrary::queryArgs()
+	 * @return array{items: list<array{id: int, name: string, thumb: string|null, width: int|null, height: int|null, mime: string, date: string, alt: string}>, more: bool}
 	 */
-	public static function browse(string $search = '', int $page = 1, int $perPage = 30): array
+	public static function browse(string $search = '', int $page = 1, int $perPage = 30, array $filters = []): array
 	{
-		$query = new \WP_Query([
+		$query = new \WP_Query(MediaLibrary::queryArgs($filters) + [
 			'post_type' => 'attachment',
 			'post_mime_type' => self::MIMES,
 			'post_status' => 'inherit',
@@ -137,7 +170,16 @@ final class Media
 		$items = array_map(function ($p) {
 			[$width, $height] = self::size($p->ID);
 
-			return ['id' => $p->ID, 'name' => $p->post_title ?: basename((string) get_attached_file($p->ID)), 'thumb' => self::thumb($p->ID), 'width' => $width, 'height' => $height];
+			return [
+				'id' => $p->ID,
+				'name' => $p->post_title ?: basename((string) get_attached_file($p->ID)),
+				'thumb' => self::thumb($p->ID),
+				'width' => $width,
+				'height' => $height,
+				'mime' => $p->post_mime_type,
+				'date' => wp_date('d.m.Y', strtotime($p->post_date_gmt . ' UTC')),
+				'alt' => (string) get_post_meta($p->ID, MediaAttributes::META_ALT, true),
+			];
 		}, $query->posts);
 
 		return ['items' => $items, 'more' => $page < (int) $query->max_num_pages];
@@ -158,6 +200,7 @@ final class Media
 			'orderby' => 'date',
 			'order' => 'DESC',
 			'exclude' => $exclude,
+			'meta_query' => [MediaLibrary::visible()],
 		]);
 
 		return array_map(fn ($p) => ['id' => $p->ID, 'name' => $p->post_title ?: basename((string) get_attached_file($p->ID)), 'thumb' => self::thumb($p->ID)], $posts);

@@ -95,3 +95,120 @@
   & strong, & b { font-weight: 600; }
   & h3 { font-weight: 600; margin-top: 1em; }
 }
+
+/*--- SZABLON UMOWY: PAPIER A4 PIONOWO ---*/
+/* Wymiary w mm i pt, bo to wymiary kartki, a nie interfejsu. Podgląd jest przybliżeniem, nie obietnicą zgodności z Wordem. */
+.ct-paper,
+.ct-sheet {
+  width: 210mm;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-overlay);
+}
+
+.ct-paper {
+  min-height: 297mm;
+  padding: 20mm;
+}
+
+.ct-sheet {
+  display: flex;
+  flex-direction: column;
+  height: 297mm;
+  padding: 20mm;
+  overflow: hidden;
+}
+
+.ct-sheet-body {
+  flex: 1;
+  min-height: 0;
+  margin-block: 4mm;
+}
+
+.ct-region {
+  outline: none;
+  min-height: 1.5em;
+}
+
+.ct-region-side {
+  border: 1px dashed var(--color-line-strong);
+  padding: 2mm;
+  color: var(--color-ink-soft);
+}
+
+.ct-region-side:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-ink-muted);
+}
+
+.ct-region:focus {
+  border-color: var(--color-accent);
+}
+
+.ct-doc {
+  font-size: 11pt;
+  line-height: 1.45;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.ct-doc .ct-doc-body,
+.ct-sheet-body {
+  counter-reset: ct-par;
+}
+
+.ct-doc p,
+.ct-doc ul,
+.ct-doc ol,
+.ct-doc table {
+  margin-block: 0 2.5mm;
+}
+
+.ct-doc h1 { font-size: 16pt; font-weight: 700; margin-block: 4mm 3mm; }
+.ct-doc h2 { font-size: 13pt; font-weight: 700; margin-block: 4mm 2.5mm; }
+.ct-doc h3 { font-size: 11pt; font-weight: 700; margin-block: 3mm 2mm; }
+.ct-doc strong { font-weight: 700; }
+.ct-doc em { font-style: italic; }
+.ct-doc u { text-decoration: underline; }
+.ct-doc ul { list-style: disc; padding-left: 6mm; }
+.ct-doc ol { list-style: decimal; padding-left: 6mm; }
+.ct-doc table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ct-doc td,
+.ct-doc th { border: 1px solid var(--color-line-strong); padding: 1.5mm 2mm; vertical-align: top; }
+.ct-doc td > :last-child,
+.ct-doc th > :last-child { margin-bottom: 0; }
+
+.ct-doc .ct-par {
+  counter-increment: ct-par;
+  margin-block-start: 4mm;
+  font-weight: 700;
+  text-align: center;
+}
+
+.ct-doc .ct-par::before {
+  content: '§ ' counter(ct-par) '. ';
+}
+
+.ct-doc .ct-small { font-size: 9pt; }
+.ct-doc .ct-center { text-align: center; }
+.ct-doc .ct-right { text-align: right; }
+.ct-doc .ct-justify { text-align: justify; }
+
+.ct-doc .ct-var {
+  border-radius: var(--radius-control);
+  background: var(--color-accent-soft);
+  padding-inline: 1mm;
+  white-space: nowrap;
+}
+
+.ct-doc .ct-missing {
+  border-radius: var(--radius-control);
+  background: var(--color-danger-soft);
+  padding-inline: 1mm;
+  color: var(--color-danger);
+}
+
+.ct-doc hr.ct-break {
+  margin-block: 5mm;
+  border: 0;
+  border-top: 1px dashed var(--color-accent);
+}

@@ -15,7 +15,8 @@ class EnsureSchema
 {
 	public function handle(Request $request, Closure $next): Response
 	{
-		if (! Schema::hasTable('gst_offer_versions')) {
+		// Moduł umów ma własne tabele; reszta aplikacji działa bez nich, a tu byłby błąd bazy zamiast instrukcji.
+		if (! Schema::hasTable('gst_offer_versions') || ($request->routeIs('gst.contract-templates.*', 'gst.contracts.*') && ! Schema::hasTable('gst_contract_templates'))) {
 			return response(view('guesstimate.setup', ['pending' => SchemaStatus::pending()])->render(), 503);
 		}
 
