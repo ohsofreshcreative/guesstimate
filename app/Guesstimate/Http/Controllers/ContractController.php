@@ -16,6 +16,7 @@ use App\Guesstimate\Contracts\ContractValues;
 use App\Guesstimate\Contracts\ContractVersion;
 use App\Guesstimate\Contracts\PaymentSchedule;
 use App\Guesstimate\Contracts\TemplateDocument;
+use App\Guesstimate\Document\Media;
 use App\Guesstimate\Offers\Offer;
 use App\Guesstimate\Offers\OfferPolicy;
 use App\Guesstimate\Settings\SettingsRepository;
@@ -116,6 +117,7 @@ class ContractController extends Controller
 			'versions' => $versions,
 			'editable' => $editable,
 			'regions' => array_map(fn ($part) => ContractValues::render(ContractHtml::clean($part), $snapshot), TemplateDocument::parse($body)),
+			'background' => Media::image($version->backgroundId(), 'large')['url'] ?? null,
 			'fields' => ContractValues::fields($body, $snapshot),
 			'missing' => ContractValues::missing($body, $snapshot),
 			'changes' => $changes,

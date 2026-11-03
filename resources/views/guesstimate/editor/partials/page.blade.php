@@ -17,10 +17,15 @@
       </label>
     </template>
   </div>
+  <div class="mt-3 flex flex-wrap gap-2" x-show="editable">
+    <button type="button" class="{{ $secondary }}" x-show="page.copyable" x-on:click="duplicatePage()" :disabled="extraCount >= {{ $config['maxExtraPages'] }}" data-page-duplicate>Duplikuj stronę</button>
+    <button type="button" class="{{ $ghost }} text-danger" x-show="page.extra" x-on:click="removePage()" data-page-remove>Usuń stronę</button>
+  </div>
+  <p class="mt-2 text-xs text-ink-muted" x-show="page.extra && pageType !== 'custom'">Kopia ma własny wygląd (układ, tło, zdjęcie, nagłówek), a treść bierze z tych samych danych co strona „<span x-text="types[pageType].label"></span>”.</p>
   <p class="mt-2 text-sm text-ink-muted" x-show="hiddenReason(selected) === 'empty'">Strona nie ma jeszcze treści — klient jej nie zobaczy, dopóki jej nie uzupełnisz.</p>
   <p class="mt-2 text-sm text-ink-muted" x-show="hiddenReason(selected) === 'disabled'">Strona jest wyłączona — klient jej nie zobaczy.</p>
 
-  <template x-if="selected === 'situation'">
+  <template x-if="pageType === 'situation'">
     <div>
       <div class="mt-3 rounded-control border border-danger/30 bg-danger-soft px-3 py-2.5 text-sm text-danger" x-show="overflow" role="alert" data-fit-warning>
         <p class="font-medium">Tekst nie mieści się na jednej stronie A4.</p>
@@ -42,16 +47,28 @@
 <div class="{{ $section }} space-y-4">
   <h3 class="font-semibold">Teksty</h3>
 
-  <template x-if="selected !== 'cover'">
+  <template x-if="pageType !== 'cover'">
     <div {!! $field('heading') !!}>
       <label class="{{ $label }}" for="f-ed-heading">Nagłówek strony</label>
       <input type="text" id="f-ed-heading" class="{{ $input }}" x-model="pageState.heading" maxlength="160" :placeholder="(page.default_heading || '').replaceAll('**', '')">
-      <p class="mt-1 text-xs text-ink-muted">Puste pole = nagłówek domyślny. **słowo** = pomarańczowe.</p>
+      <p class="mt-1 text-xs text-ink-muted" x-text="pageType === 'custom' ? 'Puste pole = strona bez nagłówka. **słowo** = pomarańczowe.' : 'Puste pole = nagłówek domyślny. **słowo** = pomarańczowe.'"></p>
       <p class="mt-1 text-xs text-danger" x-text="fieldError(`document.pages.${selected}.heading`)"></p>
     </div>
   </template>
 
-  <template x-if="selected === 'cover'">
+  {{-- Własna strona: treść z edytora WYSIWYG. x-for z kluczem strony odświeża edytor przy przejściu na inną własną stronę. --}}
+  <template x-for="id in (pageType === 'custom' ? [selected] : [])" :key="id">
+    <div {!! $field('html') !!}>
+      <p class="{{ $label }}">Treść strony</p>
+      <div x-data="richText()" x-modelable="html" x-model="pageState.html" class="min-w-0">
+        @include('guesstimate.partials.rich-text-body', ['label' => 'Treść strony', 'id' => 'f-ed-custom-html'])
+      </div>
+      <p class="mt-1 text-xs text-ink-muted">Treść dłuższa niż strona A4 przechodzi na kolejną stronę („cd.”).</p>
+      <p class="mt-1 text-xs text-danger" x-text="fieldError(`document.pages.${selected}.html`)"></p>
+    </div>
+  </template>
+
+  <template x-if="pageType === 'cover'">
     <div class="space-y-4">
       <div {!! $field('cover_heading') !!}>
         <label class="{{ $label }}" for="f-ed-cover-heading">Nagłówek okładki</label>
@@ -67,7 +84,7 @@
     </div>
   </template>
 
-  <template x-if="selected === 'situation'">
+  <template x-if="pageType === 'situation'">
     <div {!! $field('situation') !!}>
       <p class="{{ $label }}">Jak rozumiemy Twoją sytuację?</p>
       <div x-data="richText()" x-modelable="html" x-model="state.content.situation" class="min-w-0">
@@ -78,7 +95,7 @@
     </div>
   </template>
 
-  <template x-if="selected === 'solution'">
+  <template x-if="pageType === 'solution'">
     <div class="space-y-3">
       <p class="text-sm text-ink-muted">Od {{ $config['minBlocks'] }} do {{ $config['maxBlocks'] }} bloków. <span class="text-danger" x-text="fieldError('blocks')"></span></p>
       <template x-for="(block, index) in blocks" :key="index">
@@ -100,7 +117,7 @@
     </div>
   </template>
 
-  <template x-if="selected === 'pricing'">
+  <template x-if="pageType === 'pricing'">
     <div class="space-y-4">
       <div class="rounded-control border border-line bg-canvas px-3 py-2.5 text-sm" {!! $field('price') !!}>
         <p class="font-medium">Cena pochodzi z kalkulatora</p>
@@ -116,7 +133,7 @@
     </div>
   </template>
 
-  <template x-if="selected === 'extras'">
+  <template x-if="pageType === 'extras'">
     <div class="space-y-3">
       <div {!! $field('extras_intro') !!}>
         <label class="{{ $label }}" for="f-ed-extras-intro">Wstęp</label>
@@ -139,7 +156,7 @@
     </div>
   </template>
 
-  <template x-if="selected === 'references'">
+  <template x-if="pageType === 'references'">
     <div class="space-y-3">
       <div {!! $field('references_intro') !!}>
         <label class="{{ $label }}" for="f-ed-ref-intro">Wstęp</label>
@@ -164,7 +181,7 @@
     </div>
   </template>
 
-  <template x-if="selected === 'next_steps'">
+  <template x-if="pageType === 'next_steps'">
     <div class="space-y-3">
       <div class="space-y-2" {!! $field('next_steps') !!}>
         <template x-for="(row, index) in state.document.next_steps" :key="index">
@@ -188,7 +205,7 @@
     </div>
   </template>
 
-  <template x-if="selected === 'contact'">
+  <template x-if="pageType === 'contact'">
     <div {!! $field('contact') !!}>
       <label class="{{ $label }}" for="f-ed-contact">Osoba kontaktowa</label>
       <select id="f-ed-contact" class="{{ $input }}" x-model.number="state.document.contact_user_id">

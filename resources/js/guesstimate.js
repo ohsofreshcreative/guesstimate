@@ -15,6 +15,7 @@ import contractEditor from './guesstimate/contract-editor.js';
 import { renderSheets } from './guesstimate/contract-sheets.js';
 import clickupIntegration from './guesstimate/clickup-integration.js';
 import mediaLibrary from './guesstimate/media-library.js';
+import mediaPick from './guesstimate/media-pick.js';
 import initLivePrice from './guesstimate/live-price.js';
 
 Alpine.data('pageList', pageList);
@@ -39,6 +40,7 @@ Alpine.data('contractPreview', () => ({
 }));
 Alpine.data('clickupIntegration', clickupIntegration);
 Alpine.data('mediaLibrary', mediaLibrary);
+Alpine.data('mediaPick', mediaPick);
 
 window.Alpine = Alpine;
 Alpine.start();

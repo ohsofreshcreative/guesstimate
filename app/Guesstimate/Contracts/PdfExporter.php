@@ -26,7 +26,10 @@ final class PdfExporter
 	/** Wysokość A4 w pt. */
 	private const PAGE_HEIGHT = 841.89;
 
-	public static function render(array $regions, string $title): string
+	/**
+	 * @param  string|null  $background  plik graficzny tła stron (papier firmowy) albo null
+	 */
+	public static function render(array $regions, string $title, ?string $background = null): string
 	{
 		if (preg_match('/[\x{10000}-\x{10FFFF}]/u', implode('', $regions))) {
 			throw new InvalidArgumentException('Umowa zawiera znaki spoza fontu PDF (np. emoji). Usuń je w nowej wersji albo użyj DOCX.');
@@ -38,14 +41,16 @@ final class PdfExporter
 			throw new InvalidArgumentException('Nagłówek i stopka umowy są zbyt wysokie, by zmieścić treść na stronie A4.');
 		}
 
+		// Dompdf działa bez dostępu do plików i sieci, więc tło trafia do dokumentu jako data URI.
+		$image = $background ? self::dataUri($background) : null;
 		$uses = str_contains(implode('', $regions), 'data-var="page.count"');
-		$bytes = self::pass($regions, $title, 0, $pages, $space);
+		$bytes = self::pass($regions, $title, 0, $pages, $space, $image);
 
 		// Dompdf nie zna liczby stron w `counter(pages)`, więc pierwszy przebieg ją mierzy.
-		return $uses ? self::pass($regions, $title, $pages, $pages, $space) : $bytes;
+		return $uses ? self::pass($regions, $title, $pages, $pages, $space, $image) : $bytes;
 	}
 
-	private static function pass(array $regions, string $title, int $total, ?int &$pages, array $space): string
+	private static function pass(array $regions, string $title, int $total, ?int &$pages, array $space, ?string $image = null): string
 	{
 		$dompdf = self::engine();
 		$limit = self::PAGE_HEIGHT - (self::MARGIN + $space['bottom']) / self::PT_TO_MM;
@@ -58,7 +63,7 @@ final class PdfExporter
 				$cut = $cut || ($box['y'] < $limit && $box['y'] + $box['h'] > $limit + 1);
 			}
 		}]]);
-		$dompdf->loadHtml(self::html($regions, $title, $total, $space), 'UTF-8');
+		$dompdf->loadHtml(self::html($regions, $title, $total, $space, $image), 'UTF-8');
 		$dompdf->render();
 
 		if ($cut) {
@@ -121,7 +126,7 @@ final class PdfExporter
 		return $space;
 	}
 
-	public static function html(array $regions, string $title, int $total = 0, array $space = ['top' => 0.0, 'bottom' => 0.0]): string
+	public static function html(array $regions, string $title, int $total = 0, array $space = ['top' => 0.0, 'bottom' => 0.0], ?string $image = null): string
 	{
 		[$header, $body, $footer] = array_map(fn ($part) => self::prepare($part, $total), [$regions['header'], $regions['body'], $regions['footer']]);
 		$top = $space['top'];
@@ -135,7 +140,13 @@ final class PdfExporter
 			$bottom,
 		);
 
+		// Tło całej kartki: element stały jest liczony od pola treści, więc przesuwamy go o marginesy strony.
+		if ($image !== null) {
+			$css .= sprintf('.gst-bg{position:fixed;top:-%1$.1fmm;left:-%2$dmm;width:210mm;height:297mm}.gst-bg img{width:210mm;height:297mm}', self::MARGIN + $top, self::MARGIN);
+		}
+
 		return '<!DOCTYPE html><html lang="pl"><head><meta charset="utf-8"><title>' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</title><style>' . $css . self::STYLE . '</style></head><body>'
+			. ($image !== null ? '<div class="gst-bg"><img src="' . $image . '" alt=""></div>' : '')
 			. ($header !== '' ? "<div class=\"gst-header\">{$header}</div>" : '')
 			. ($footer !== '' ? "<div class=\"gst-footer\">{$footer}</div>" : '')
 			. $body . '</body></html>';
@@ -148,6 +159,17 @@ final class PdfExporter
 		. 'thead{display:table-header-group}tr{page-break-inside:avoid}h1,h2,h3,.ct-par{page-break-after:avoid}'
 		. '.ct-par{margin-top:4mm;font-weight:bold;text-align:center}.ct-small{font-size:8pt}.ct-center{text-align:center}'
 		. '.ct-right{text-align:right}.ct-justify{text-align:justify}.gst-break{page-break-before:always}.gst-page::after{content:counter(page)}';
+
+	private static function dataUri(string $file): ?string
+	{
+		$type = wp_check_filetype($file)['type'] ?? null;
+
+		if (! in_array($type, ['image/jpeg', 'image/png', 'image/webp'], true) || ! is_readable($file)) {
+			return null;
+		}
+
+		return 'data:' . $type . ';base64,' . base64_encode((string) file_get_contents($file));
+	}
 
 	private static function prepare(string $html, int $total): string
 	{

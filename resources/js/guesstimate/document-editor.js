@@ -21,7 +21,7 @@ export default (config) => ({
   editable: config.editable,
   state: clone(config.state),
   saved: JSON.stringify(config.state),
-  pages: config.pages,
+  types: config.types,
   library: config.library,
   folders: config.folders || [],
   images: config.images || {},
@@ -82,7 +82,10 @@ export default (config) => ({
 
   get dirty() { return JSON.stringify(this.state) !== this.saved; },
   get templateMode() { return this.state.document.layout_mode === 'template'; },
-  get page() { return this.pages.find((p) => p.key === this.selected); },
+  get page() { return this.pageInfo(this.selected); },
+  get pageType() { return this.page?.type || null; },
+  get pageList() { return this.state.document.page_order.map((id) => this.pageInfo(id)).filter(Boolean); },
+  get extraCount() { return Object.values(this.state.document.pages).filter((page) => page.type).length; },
   get pageState() { return this.state.document.pages[this.selected]; },
   get mediaLayout() { return !!this.page?.layouts.find((l) => l.key === this.pageState.layout)?.media; },
   get overflow() { return !!this.report.situation?.overflow; },
@@ -99,6 +102,18 @@ export default (config) => ({
       n += item.count - 1;
     }
     return null;
+  },
+
+  /** Strona gotowa (klucz = typ) albo dodatkowa (`extra_N` z typem: własna lub kopia). */
+  pageInfo(id) {
+    const state = this.state.document.pages[id];
+    if (!state) return null;
+    const type = state.type || id;
+    const def = this.types[type];
+    const extra = !!state.type;
+    let label = def.label;
+    if (extra) label = type === 'custom' ? (String(state.heading || '').replaceAll('**', '').trim().slice(0, 60) || def.label) : `${def.label} (kopia)`;
+    return { ...def, key: id, type, extra, label, optional: def.optional || extra };
   },
 
   hiddenReason(key) { return this.summary.find((p) => p.key === key)?.hidden || null; },
@@ -206,7 +221,7 @@ export default (config) => ({
   },
 
   select(key, field = null, focus = true) {
-    if (!this.pages.find((p) => p.key === key)) return;
+    if (!this.state.document.pages[key]) return;
     this.selected = key;
     this.field = field;
     this.tab = 'page';
@@ -223,7 +238,7 @@ export default (config) => ({
   },
 
   go(delta) {
-    const visible = this.pages.map((p) => p.key);
+    const visible = this.state.document.page_order;
     const index = visible.indexOf(this.selected) + delta;
     if (index >= 0 && index < visible.length) this.select(visible[index]);
   },
@@ -463,7 +478,7 @@ export default (config) => ({
     Object.entries(this.frame()?.gstDoc?.measureAll() || {}).forEach(([key, rects]) => {
       const page = this.state.document.pages[key];
       if (page.fields || !rects.length) return;
-      const label = this.pages.find((item) => item.key === key).label;
+      const label = this.pageInfo(key)?.label || key;
       // Strona wydłużona nadmiarem treści nie ma pozycji w obrębie A4: zostaje przy szablonie.
       if (rects.some((rect) => rect.x + rect.width > 100 || rect.y + rect.actual > 100)) {
         skipped.push(label);
@@ -544,6 +559,56 @@ export default (config) => ({
     if (!shortcut) return;
     event.preventDefault();
     this.onKey({ key: event.key, shift: event.shiftKey, control });
+  },
+
+  /*--- Strony: kolejność, kopie i własne strony (strony gotowe można tylko przesuwać) ---*/
+
+  nextPageId() {
+    let n = 1;
+    while (this.state.document.pages[`extra_${n}`]) n += 1;
+    return `extra_${n}`;
+  },
+
+  insertPage(page, after) {
+    if (!this.editable || this.extraCount >= config.maxExtraPages) return;
+    const id = this.nextPageId();
+    const order = this.state.document.page_order;
+    this.state.document.pages[id] = page;
+    const index = order.indexOf(after);
+    order.splice(index < 0 ? order.length : index + 1, 0, id);
+    this.select(id);
+  },
+
+  addCustomPage() {
+    this.insertPage({
+      type: 'custom', enabled: true, background_id: null, fit: null, layout: 'full', image_id: null, image_crop: null, fields: null, polish: null, heading: '', html: '',
+    }, this.selected);
+  },
+
+  /** Kopia: wygląd i ustawienia strony; treść gotowej strony pochodzi z tych samych danych oferty. */
+  duplicatePage(id = this.selected) {
+    const info = this.pageInfo(id);
+    if (!info?.copyable) return;
+    this.insertPage({ ...clone(this.state.document.pages[id]), type: info.type, fields: null }, id);
+  },
+
+  removePage(id = this.selected) {
+    const info = this.pageInfo(id);
+    if (!this.editable || !info?.extra) return;
+    if (!window.confirm(`Usunąć stronę „${info.label}”?`)) return;
+    const order = this.state.document.page_order;
+    const index = order.indexOf(id);
+    order.splice(index, 1);
+    delete this.state.document.pages[id];
+    if (this.selected === id) this.select(order[Math.max(0, index - 1)]);
+  },
+
+  movePage(id, delta) {
+    const order = this.state.document.page_order;
+    const index = order.indexOf(id);
+    const target = index + delta;
+    if (!this.editable || index < 0 || target < 0 || target >= order.length) return;
+    order.splice(target, 0, order.splice(index, 1)[0]);
   },
 
   /*--- Wygląd strony ---*/

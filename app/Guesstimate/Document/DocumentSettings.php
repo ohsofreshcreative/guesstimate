@@ -39,6 +39,7 @@ final class DocumentSettings
 			'next_steps_note' => (string) ($doc['next_steps_note'] ?? ''),
 			'contact_user_id' => $contactUserId,
 			'pages' => $pages,
+			'page_order' => array_keys($pages),
 			// Wynik pomiaru z edytora (czy strona „Sytuacja” mieści się na A4) — tylko metadane, nie treść.
 			'fit_report' => [],
 		];
@@ -68,7 +69,22 @@ final class DocumentSettings
 			$pages[$key] = $page;
 		}
 
+		// Strony dodatkowe (własne i kopie); wpis z nieznanym typem jest pomijany.
+		foreach ((array) ($stored['pages'] ?? []) as $id => $storedPage) {
+			$id = (string) $id;
+
+			if (! Pages::isExtra($id) || ! is_array($storedPage) || ! Pages::extraType($storedPage['type'] ?? null) || count($pages) >= count(Pages::TYPES) + Pages::MAX_EXTRA) {
+				continue;
+			}
+
+			$type = $storedPage['type'];
+			$page = array_replace(Pages::blank($type), $storedPage);
+			$page['layout'] = Pages::layout($type, $page['layout'] ?? null);
+			$pages[$id] = $page;
+		}
+
 		$merged['pages'] = $pages;
+		$merged['page_order'] = Pages::order($pages, $stored['page_order'] ?? null);
 		$merged['fit_report'] = (array) ($stored['fit_report'] ?? []);
 
 		return $merged;
@@ -104,6 +120,11 @@ final class DocumentSettings
 	 */
 	public static function activeFields(array $doc, string $key): ?array
 	{
+		// Strony dodatkowe zawsze mają układ z szablonu.
+		if (Pages::isExtra($key)) {
+			return null;
+		}
+
 		return ($doc['layout_mode'] ?? null) === self::MODE_TEMPLATE ? null : FieldLayout::normalize($doc['pages'][$key]['fields'] ?? null, $key);
 	}
 

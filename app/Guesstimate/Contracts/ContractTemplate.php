@@ -14,7 +14,7 @@ class ContractTemplate extends Model
 {
 	protected $table = 'gst_contract_templates';
 
-	protected $casts = ['current_version_id' => 'integer', 'created_by' => 'integer', 'archived_by' => 'integer', 'archived_at' => 'datetime'];
+	protected $casts = ['current_version_id' => 'integer', 'background_id' => 'integer', 'created_by' => 'integer', 'archived_by' => 'integer', 'archived_at' => 'datetime'];
 
 	public function versions(): HasMany
 	{

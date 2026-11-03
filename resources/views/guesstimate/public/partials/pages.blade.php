@@ -13,6 +13,7 @@
   @php
     // Bez wybranego zdjęcia treść zajmuje całą szerokość — także w edytorze (pomiar jak u klienta);
     // edytor pokazuje wtedy tylko przycisk „+ Zdjęcie strony”.
+    $type = $page['type'] ?? $page['key']; // strona dodatkowa (własna albo kopia) ma szablon swojego typu
     $slot = \App\Guesstimate\Document\Pages::hasMedia($page['layout']);
     $media = $slot && $page['image'];
     $side = $page['layout'] === 'image_text' ? 'left' : 'right';
@@ -36,7 +37,7 @@
       @else
         <div class="osf-glow absolute inset-0"></div>
         <div class="osf-gradient osf-bar-top"></div>
-        @if ($page['key'] === 'cover')<div class="osf-gradient osf-bar-bottom"></div>@endif
+        @if ($type === 'cover')<div class="osf-gradient osf-bar-bottom"></div>@endif
       @endif
     </div>
 
@@ -53,7 +54,7 @@
     @endif
 
     <div class="osf-content">
-      @include('guesstimate.public.pages.' . str_replace('_', '-', $page['key']), ['offer' => $offer, 'doc' => $doc, 'page' => $page, 'logo' => $logo, 'chevrons' => $chevrons, 'edit' => $place, 'editor' => $editor])@includeWhen(! empty($page['fields']), 'guesstimate.public.partials.field-copies', ['fields' => $page['fields'] ?? null, 'place' => $place])
+      @include('guesstimate.public.pages.' . str_replace('_', '-', $type), ['offer' => $offer, 'doc' => $doc, 'page' => $page, 'logo' => $logo, 'chevrons' => $chevrons, 'edit' => $place, 'editor' => $editor])@includeWhen(! empty($page['fields']), 'guesstimate.public.partials.field-copies', ['fields' => $page['fields'] ?? null, 'place' => $place])
     </div>
 
     @if ($editor && $page['hidden'])

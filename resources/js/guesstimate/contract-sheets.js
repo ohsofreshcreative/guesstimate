@@ -72,3 +72,9 @@ export function renderSheets(host, regions) {
 
   return { pages: parts.length, overflow: overflow.length };
 }
+
+/** Początki stron 2, 3… (bez renderowania kartek): fragmenty `{ index, from? }` treści, od których zaczyna się strona. */
+export function pageStarts(host, regions) {
+  const { available, blocks } = measure(host, regions);
+  return paginate(blocks, available).pages.slice(1).map((page) => page[0]).filter(Boolean);
+}

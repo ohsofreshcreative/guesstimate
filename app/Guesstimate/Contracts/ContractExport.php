@@ -2,6 +2,7 @@
 
 namespace App\Guesstimate\Contracts;
 
+use App\Guesstimate\Document\Media;
 use InvalidArgumentException;
 
 /**
@@ -37,7 +38,24 @@ final class ContractExport
 
 		$regions = self::compose($body, $snapshot);
 
-		return $format === 'pdf' ? PdfExporter::render($regions, $title) : (new DocxExporter())->render($regions, $title);
+		return $format === 'pdf' ? PdfExporter::render($regions, $title, self::background($version)) : (new DocxExporter())->render($regions, $title);
+	}
+
+	/**
+	 * Plik tła zatwierdzonej wersji (tylko PDF; DOCX bez tła). Rozmiar „large” wystarcza na A4 i nie obciąża pamięci.
+	 */
+	private static function background(ContractVersion $version): ?string
+	{
+		$id = $version->backgroundId();
+
+		if (! $id || ! Media::isImage($id)) {
+			return null;
+		}
+
+		$large = image_get_intermediate_size($id, 'large');
+		$file = ! empty($large['path']) ? wp_upload_dir()['basedir'] . '/' . $large['path'] : get_attached_file($id);
+
+		return $file && is_readable($file) ? $file : null;
 	}
 
 	/**

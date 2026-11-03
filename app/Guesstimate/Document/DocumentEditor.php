@@ -48,17 +48,19 @@ final class DocumentEditor
 		$doc['layout_mode'] ??= null;
 
 		foreach ($doc['pages'] as $key => $page) {
-			$doc['pages'][$key] = [
+			$type = Pages::type((string) $key, $page);
+			$extra = Pages::isExtra((string) $key);
+			$doc['pages'][$key] = ($extra ? ['type' => $type] : []) + [
 				'enabled' => (bool) $page['enabled'],
 				'background_id' => $page['background_id'] ? (int) $page['background_id'] : null,
 				'fit' => $page['fit'],
-				'layout' => Pages::layout($key, $page['layout']),
+				'layout' => Pages::layout($type, $page['layout']),
 				'image_id' => $page['image_id'] ? (int) $page['image_id'] : null,
 				'image_crop' => ImageCrop::normalize($page['image_crop'] ?? null),
-				'fields' => FieldLayout::normalize($page['fields'] ?? null, $key),
-				'polish' => PagePolish::normalize($page['polish'] ?? null, $key),
+				'fields' => $extra ? null : FieldLayout::normalize($page['fields'] ?? null, $key),
+				'polish' => PagePolish::normalize($page['polish'] ?? null, $type),
 				'heading' => $page['heading'] ?? null,
-			];
+			] + ($type === Pages::CUSTOM ? ['html' => (string) ($page['html'] ?? '')] : []);
 		}
 
 		return ['content' => OfferContent::normalize($version->content), 'document' => $doc];
@@ -76,7 +78,7 @@ final class DocumentEditor
 
 		$content = OfferContent::validate((array) ($input['content'] ?? []));
 		$texts = DocumentForm::content($docInput, $current);
-		$design = DocumentForm::design((array) ($docInput['pages'] ?? []), $texts['draft']);
+		$design = DocumentForm::design((array) ($docInput['pages'] ?? []), $texts['draft'], $docInput['page_order'] ?? null);
 
 		$errors = array_merge(
 			$content['errors'],
@@ -115,14 +117,16 @@ final class DocumentEditor
 		$lock = self::lockReason($offer, $version);
 		$defaults = (array) ($all['document']['backgrounds'] ?? []);
 
-		$pages = [];
+		// Definicje typów stron; lista stron (gotowe i dodatkowe) wynika ze stanu: document.page_order.
+		$types = [];
 
-		foreach (Pages::TYPES as $key => $label) {
-			$pages[] = [
-				'key' => $key,
+		foreach (Pages::TYPES + [Pages::CUSTOM => Pages::CUSTOM_LABEL] as $key => $label) {
+			$types[$key] = [
+				'type' => $key,
 				'label' => $label,
 				'optional' => in_array($key, Pages::OPTIONAL, true),
 				'fit' => in_array($key, Pages::FIT, true),
+				'copyable' => Pages::extraType($key),
 				'layouts' => array_map(fn ($l) => ['key' => $l, 'label' => Pages::LAYOUTS[$l], 'media' => Pages::hasMedia($l)], Pages::PAGE_LAYOUTS[$key]),
 				'default_heading' => Pages::HEADINGS[$key] ?? null,
 				'default_background_id' => isset($defaults[$key]) ? (int) $defaults[$key] : null,
@@ -140,7 +144,8 @@ final class DocumentEditor
 			'config' => [
 				'editable' => $lock === null,
 				'state' => $state,
-				'pages' => $pages,
+				'types' => $types,
+				'maxExtraPages' => Pages::MAX_EXTRA,
 				'library' => DocumentDesigner::library(),
 				'folders' => MediaLibrary::tree(MediaLibrary::folders()),
 				'versionId' => $version->id,

@@ -12,6 +12,7 @@ use App\Guesstimate\Contracts\DraftConflict;
 use App\Guesstimate\Contracts\TemplateDocument;
 use App\Guesstimate\Contracts\TemplateForm;
 use App\Guesstimate\Contracts\TemplateVariables;
+use App\Guesstimate\Document\Media;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -100,10 +101,12 @@ class ContractTemplateController extends Controller
 				'hash' => hash('sha256', (string) $version->body),
 				'name' => $template->name,
 				'description' => (string) $template->description,
+				'background' => $template->background_id ? ['id' => $template->background_id, 'url' => Media::image($template->background_id, 'large')['url'] ?? null, 'thumb' => Media::thumb($template->background_id)] : null,
 				'labels' => TemplateVariables::all(),
 				'urls' => [
 					'save' => route('gst.contract-templates.save', $template),
 					'approve' => route('gst.contract-templates.approve', $template),
+					'media' => route('gst.media.index'),
 				],
 			],
 		]);
@@ -122,6 +125,10 @@ class ContractTemplateController extends Controller
 		try {
 			$version = $this->templates->saveDraft($template, $document['body'], $this->expected($request));
 			$this->templates->rename($template, $meta['name'], $meta['description']);
+
+			if ($request->has('background_id')) {
+				$this->templates->setBackground($template, (int) $request->input('background_id') ?: null);
+			}
 		} catch (DraftConflict $e) {
 			return response()->json(['error' => $e->getMessage()], 409);
 		} catch (InvalidArgumentException $e) {

@@ -40,7 +40,7 @@
       <div hidden x-ref="body">{!! $regions['body'] !!}</div>
       <p class="mb-3 text-center text-sm text-ink-soft"><span x-text="pageCount"></span> str. Układ jest przybliżony: podział stron w eksporcie i w Wordzie może się różnić.</p>
       <p class="mb-3 text-center text-sm text-danger" role="alert" x-show="overflow" x-cloak>Część treści nie mieści się na stronie.</p>
-      <div class="mx-auto flex w-fit flex-col gap-6" x-ref="sheets"></div>
+      <div class="mx-auto flex w-fit flex-col gap-6" x-ref="sheets"@if ($background) style="--ct-bg: url('{{ $background }}')"@endif></div>
     </div>
 
     <aside class="w-full shrink-0 border-line bg-surface lg:w-96 lg:overflow-y-auto lg:border-l" aria-label="Dane umowy">

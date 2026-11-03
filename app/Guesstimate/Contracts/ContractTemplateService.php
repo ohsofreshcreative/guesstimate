@@ -3,6 +3,7 @@
 namespace App\Guesstimate\Contracts;
 
 use App\Guesstimate\Auth\AccessDenied;
+use App\Guesstimate\Document\Media;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -131,6 +132,27 @@ class ContractTemplateService
 	}
 
 	/**
+	 * Tło stron (papier firmowy) to wygląd, nie treść: nie zmienia skrótu wersji. Zatwierdzone umowy mają własną kopię.
+	 */
+	public function setBackground(ContractTemplate $template, ?int $attachmentId): void
+	{
+		$this->allow();
+
+		if ($attachmentId !== null && ! Media::isImage($attachmentId)) {
+			throw new InvalidArgumentException('Tło: wybierz obraz JPG, PNG lub WebP z biblioteki grafik.');
+		}
+
+		$template->fill(['background_id' => $attachmentId]);
+
+		if ($template->isDirty('background_id')) {
+			DB::transaction(function () use ($template, $attachmentId) {
+				$template->save();
+				ContractEvent::record('template_background', template: $template, payload: ['attachment_id' => $attachmentId]);
+			});
+		}
+	}
+
+	/**
 	 * Kopia to nowy, niezależny szablon ze szkicem w wersji 1. Oryginał i jego historia zostają bez zmian.
 	 * Ostrzeżenia z importu idą za treścią, żeby kopia nie omijała potwierdzenia porównania.
 	 */
@@ -140,7 +162,7 @@ class ContractTemplateService
 
 		return DB::transaction(function () use ($source, $name) {
 			$original = $source->template;
-			$copy = ContractTemplate::create(['name' => $name, 'description' => $original->description, 'created_by' => get_current_user_id() ?: null]);
+			$copy = ContractTemplate::create(['name' => $name, 'description' => $original->description, 'background_id' => $original->background_id, 'created_by' => get_current_user_id() ?: null]);
 			$this->addVersion($copy, (string) $source->body, 1);
 			ContractEvent::record('template_duplicated', template: $copy, versionNo: 1, payload: ['from_template' => $original->id, 'from_version' => $source->version_no]);
 

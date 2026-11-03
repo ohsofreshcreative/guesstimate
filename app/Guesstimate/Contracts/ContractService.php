@@ -190,6 +190,7 @@ class ContractService
 			$hash = $version->fingerprint();
 			$version->update([
 				'status' => ContractStatus::Approved,
+				'background_id' => $version->backgroundId(),
 				'content_hash' => $hash,
 				'approved_by' => get_current_user_id() ?: null,
 				'approved_at' => now(),

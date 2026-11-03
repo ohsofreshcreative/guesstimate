@@ -156,6 +156,16 @@ class ContractExportTest extends TestCase
 		$this->assertSame(2, preg_match_all('~/Type\s*/Page\b~', $bytes));
 	}
 
+	public function test_pdf_background_covers_every_page_under_content(): void
+	{
+		$regions = $this->regions('<p>a</p><hr class="ct-break"><p>b</p>');
+		$html = PdfExporter::html($regions, 'T', 0, ['top' => 0.0, 'bottom' => 0.0], 'data:image/png;base64,AAAA');
+
+		$this->assertStringContainsString('.gst-bg{position:fixed;top:-20.0mm;left:-20mm;width:210mm;height:297mm}', $html);
+		$this->assertLessThan(strpos($html, '<p>a</p>'), strpos($html, '<div class="gst-bg"><img src="data:image/png;base64,AAAA"'));
+		$this->assertStringNotContainsString('gst-bg', PdfExporter::html($regions, 'T'));
+	}
+
 	public function test_pdf_refuses_characters_the_font_would_lose(): void
 	{
 		$this->expectException(InvalidArgumentException::class);

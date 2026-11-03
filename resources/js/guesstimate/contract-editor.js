@@ -4,7 +4,8 @@
 // Tekst to treść prawna: edytor nigdy nie zmienia go sam, a wklejanie przyjmuje czysty tekst.
 
 import { postJson } from './http.js';
-import { renderSheets } from './contract-sheets.js';
+import { pageStarts, renderSheets } from './contract-sheets.js';
+import mediaPick from './media-pick.js';
 
 const REGIONS = ['header', 'body', 'footer'];
 const STYLES = {
@@ -29,8 +30,13 @@ export default (config) => ({
   range: null,
   past: [],
   future: [],
+  breaks: [],
+  // Tło stron z biblioteki grafik; zapis razem z szablonem.
+  background: config.background,
+  bgPicker: mediaPick({ url: config.urls.media }),
 
   init() {
+    this.$nextTick(() => this.markBreaks());
     if (!this.editable) return;
     document.execCommand('defaultParagraphSeparator', false, 'p');
     // Starsze szkice mogą mieć pusty akapit bez wysokości, w który nie da się kliknąć.
@@ -86,6 +92,30 @@ export default (config) => ({
   apply(state) {
     REGIONS.forEach((name) => { this.region(name).innerHTML = state[name]; });
     this.range = null;
+    this.markBreaks();
+  },
+
+  /** Linie końca strony w edycji: ten sam podział co „Podgląd A4”, liczony na niewidocznej kartce. */
+  markBreaks() {
+    const paper = this.$refs.paper;
+    const body = this.region('body');
+    if (!paper || !body || !this.$refs.measure || this.mode !== 'edit') return;
+    const starts = pageStarts(this.$refs.measure, { header: this.region('header').innerHTML, footer: this.region('footer').innerHTML, nodes: [...body.children] });
+    this.$refs.measure.innerHTML = '';
+    const origin = paper.getBoundingClientRect().top;
+    this.breaks = starts.map((part, i) => {
+      const node = body.children[part.index];
+      const rows = node?.matches('table') ? node.querySelector('tbody')?.rows : node?.children;
+      const element = part.from ? rows?.[part.from] : node;
+      return element ? { page: i + 2, top: Math.round(element.getBoundingClientRect().top - origin) } : null;
+    }).filter(Boolean);
+    this.pageCount = this.breaks.length + 1;
+  },
+
+  setBackground(item) {
+    this.background = item ? { id: item.id, url: item.url || item.thumb, thumb: item.thumb } : null;
+    this.dirty = true;
+    this.status = '';
   },
 
   // Własna historia: tabele i klasy zmieniamy na DOM, czego natywne cofanie nie widzi.
@@ -98,6 +128,7 @@ export default (config) => ({
     this.future = [];
     this.dirty = true;
     this.status = '';
+    this.markBreaks();
   },
 
   undo() {
@@ -314,7 +345,7 @@ export default (config) => ({
 
     try {
       const state = this.snapshot();
-      const data = await postJson(this.urls.save, { ...state, name: this.name, description: this.description, hash: this.hash });
+      const data = await postJson(this.urls.save, { ...state, name: this.name, description: this.description, background_id: this.background?.id || null, hash: this.hash });
       this.hash = data.hash;
       // Serwer pokazuje, co faktycznie zapisał; kursora nie ruszamy, gdy tekst jest taki sam.
       REGIONS.forEach((name) => { if (data.regions[name] !== state[name]) this.region(name).innerHTML = data.regions[name]; });
@@ -349,7 +380,7 @@ export default (config) => ({
 
   togglePreview() {
     this.mode = this.mode === 'edit' ? 'preview' : 'edit';
-    if (this.mode === 'preview') this.$nextTick(() => this.renderPreview());
+    this.$nextTick(() => (this.mode === 'preview' ? this.renderPreview() : this.markBreaks()));
   },
 
   renderPreview() {

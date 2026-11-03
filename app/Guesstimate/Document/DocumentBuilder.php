@@ -64,11 +64,21 @@ final class DocumentBuilder
 		$backgrounds = Background::whereIn('id', array_filter(array_column($doc['pages'], 'background_id')) ?: [0])->get()->keyBy('id');
 		$pages = [];
 
-		foreach (Pages::TYPES as $key => $label) {
-			$page = $doc['pages'][$key] ?? Pages::blank($key);
+		foreach ($doc['page_order'] as $key) {
+			$page = $doc['pages'][$key] ?? null;
+
+			if (! $page) {
+				continue;
+			}
+
+			$type = Pages::type($key, $page);
+			$extra = Pages::isExtra($key);
+			$filled = $type === Pages::CUSTOM
+				? trim((string) ($page['heading'] ?? '')) !== '' || ! OfferContent::isEmpty((string) ($page['html'] ?? ''))
+				: $has[$type];
 			$hidden = match (true) {
-				in_array($key, Pages::OPTIONAL, true) && empty($page['enabled']) => 'disabled',
-				! $has[$key] => 'empty',
+				($extra || in_array($type, Pages::OPTIONAL, true)) && empty($page['enabled']) => 'disabled',
+				! $filled => 'empty',
 				default => null,
 			};
 
@@ -77,20 +87,20 @@ final class DocumentBuilder
 			}
 
 			$background = $page['background_id'] ? $backgrounds->get($page['background_id']) : null;
-			$layout = Pages::layout($key, $page['layout'] ?? null);
+			$layout = Pages::layout($type, $page['layout'] ?? null);
 			$image = Pages::hasMedia($layout) && ! empty($page['image_id']) ? Media::image((int) $page['image_id'], 'large') : null;
 			$crop = $image ? ImageCrop::normalize($page['image_crop'] ?? null) : null;
 			$fields = DocumentSettings::activeFields($doc, $key);
-			$polish = (array) PagePolish::normalize($page['polish'] ?? null, $key);
+			$polish = (array) PagePolish::normalize($page['polish'] ?? null, $type);
 			unset($polish['image_crops']); // w snapshocie kadr należy do realizacji
 
-			if (! $image && $key !== 'references') {
+			if (! $image && $type !== 'references') {
 				unset($polish['image_fit']);
 			}
 
 			$pages[] = [
 				'key' => $key,
-				'label' => $label,
+				'label' => Pages::label($key, $page),
 				'background' => $background ? Media::image($background->attachment_id) : null,
 				'background_id' => $background?->id,
 				'fit' => DocumentSettings::fit($page, $background),
@@ -98,10 +108,10 @@ final class DocumentBuilder
 				// Zdjęcie strony: adresy i wymiary zapisane w snapshocie — późniejsze zmiany w bibliotece mediów
 				// nie zmieniają opublikowanej oferty.
 				'image' => $image,
-				'heading' => self::heading($key, $page['heading'] ?? null, $version),
+				'heading' => self::heading($type, $page['heading'] ?? null, $version),
 				'hidden' => $hidden,
 				// Klucze tylko przy ustawionych wartościach: inaczej każda aktywna publikacja wyglądałaby na nieaktualną.
-			] + ($crop ? ['image_crop' => $crop] : []) + ($fields ? ['fields' => $fields] : []) + ($polish ? ['polish' => $polish] : []);
+			] + ($extra ? ['type' => $type] : []) + ($type === Pages::CUSTOM ? ['html' => OfferContent::clean($page['html'] ?? '')] : []) + ($crop ? ['image_crop' => $crop] : []) + ($fields ? ['fields' => $fields] : []) + ($polish ? ['polish' => $polish] : []);
 		}
 
 		$logoId = (int) ($global['logo_attachment_id'] ?? 0);

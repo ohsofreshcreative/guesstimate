@@ -87,18 +87,26 @@
   <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
     <main class="min-w-0 flex-1 overflow-auto bg-canvas p-6">
       <div class="mx-auto w-fit" x-show="mode === 'edit'">
-        <div class="ct-paper ct-doc" x-on:keydown="keydown($event)" x-on:input.debounce.400ms="record()" x-on:paste="paste($event)">
+        <p class="mb-3 text-center text-sm text-ink-soft">Linie pokazują koniec strony A4 (ok. <span x-text="pageCount"></span> str.). Podział jest przybliżony, jak w podglądzie.</p>
+        <div x-ref="paper" class="ct-paper ct-doc relative" :style="background ? `--ct-bg: url('${background.url}')` : ''" x-on:keydown="keydown($event)" x-on:input.debounce.400ms="record()" x-on:paste="paste($event)">
           <div x-ref="header" class="ct-region ct-region-side" data-placeholder="Nagłówek każdej strony" aria-label="Nagłówek dokumentu" @if ($editable) contenteditable="true" @endif>{!! $regions['header'] !!}</div>
           <div x-ref="body" class="ct-region ct-doc-body my-4" aria-label="Treść dokumentu" @if ($editable) contenteditable="true" @endif>{!! $regions['body'] !!}</div>
           <div x-ref="footer" class="ct-region ct-region-side" data-placeholder="Stopka każdej strony" aria-label="Stopka dokumentu" @if ($editable) contenteditable="true" @endif>{!! $regions['footer'] !!}</div>
+          {{-- Znaczniki końca strony: poza częściami dokumentu, więc nie trafiają do zapisu. --}}
+          <template x-for="mark in breaks" :key="mark.page">
+            <div class="pointer-events-none absolute inset-x-0 border-t-2 border-dashed border-accent/50" :style="`top: ${mark.top}px`" aria-hidden="true" data-page-break>
+              <span class="absolute -top-3 right-2 rounded-full bg-accent-soft px-2 text-xs font-medium text-accent-strong" x-text="`Strona ${mark.page}`"></span>
+            </div>
+          </template>
         </div>
+        <div x-ref="measure" class="pointer-events-none invisible fixed left-0 top-0" aria-hidden="true"></div>
       </div>
       <div x-show="mode === 'preview'" x-cloak>
         <p class="mb-3 text-center text-sm text-ink-soft">
           <span x-text="pageCount"></span> str. Układ jest przybliżony: podział stron w eksporcie i w Wordzie może się różnić.
         </p>
         <p class="mb-3 text-center text-sm text-danger" x-show="overflow" x-cloak>Niektóre bloki są wyższe niż strona A4 i zostały ucięte w podglądzie.</p>
-        <div x-ref="sheets" class="mx-auto flex w-fit flex-col gap-6"></div>
+        <div x-ref="sheets" class="mx-auto flex w-fit flex-col gap-6" :style="background ? `--ct-bg: url('${background.url}')` : ''"></div>
       </div>
     </main>
 
@@ -132,6 +140,25 @@
         <div>
           <label for="template-description" class="{{ $label }}">Opis</label>
           <input id="template-description" class="{{ $input }}" maxlength="500" x-model="description" x-on:input="dirty = true; status = ''" @disabled(! $editable)>
+        </div>
+      </div>
+
+      {{-- Tło stron (np. papier firmowy): podgląd, umowa i PDF. Zatwierdzona umowa zachowuje tło z chwili zatwierdzenia. --}}
+      <div class="{{ $section }}">
+        <h2 class="mb-1 text-sm font-semibold">Tło stron</h2>
+        <p class="mb-2 text-xs text-ink-muted">Grafika A4 pionowo z biblioteki grafik, np. papier firmowy. Widać ją w podglądzie, w umowie i w PDF (DOCX bez tła).</p>
+        <div class="flex items-center gap-3">
+          <span class="block aspect-a4-portrait w-16 shrink-0 overflow-hidden rounded-control border border-line bg-canvas">
+            <template x-if="background"><img :src="background.thumb || background.url" alt="" class="size-full object-cover"></template>
+          </span>
+          @if ($editable)
+            <div class="flex flex-col items-start gap-1">
+              <button type="button" class="{{ $secondary }}" x-on:click="bgPicker.show()" x-text="background ? 'Zmień tło' : 'Wybierz tło'" data-contract-bg-pick></button>
+              <button type="button" class="text-xs text-danger hover:underline" x-show="background" x-on:click="setBackground(null)">Usuń tło</button>
+            </div>
+          @else
+            <span class="text-sm text-ink-muted" x-text="background ? 'Tło ustawione' : 'Bez tła'"></span>
+          @endif
         </div>
       </div>
 
@@ -172,5 +199,38 @@
       <p class="px-4 py-4 text-sm text-ink-muted">Edytor obsługuje prosty dokument. Nie odwzorowuje wszystkich funkcji Worda, a wklejony tekst traci formatowanie.</p>
     </aside>
   </div>
+
+  @if ($editable)
+    <div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-10" x-show="bgPicker.open" x-cloak role="dialog" aria-modal="true" aria-labelledby="ct-bg-title" x-on:keydown.escape.window="bgPicker.open = false">
+      <div class="fixed inset-0 bg-ink/50" x-on:click="bgPicker.open = false"></div>
+      <div class="relative w-full max-w-4xl rounded-panel bg-surface shadow-overlay">
+        <div class="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3">
+          <h2 id="ct-bg-title" class="text-lg font-semibold">Tło stron — biblioteka</h2>
+          <form class="ml-auto flex gap-2" x-on:submit.prevent="bgPicker.load(true)">
+            <label for="ct-bg-q" class="sr-only">Szukaj w bibliotece</label>
+            <input type="search" id="ct-bg-q" x-model="bgPicker.q" placeholder="Szukaj…" class="{{ $input }} w-52">
+            <button type="submit" class="{{ $secondary }}">Szukaj</button>
+          </form>
+          <button type="button" class="{{ $secondary }}" x-on:click="bgPicker.open = false">Zamknij</button>
+        </div>
+        <div class="max-h-140 overflow-y-auto p-5">
+          <p class="mb-3 text-sm text-danger" x-show="bgPicker.error" x-text="bgPicker.error"></p>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+            <template x-for="item in bgPicker.items" :key="item.id">
+              <button type="button" class="text-left" x-on:click="bgPicker.pick(item); setBackground(item)">
+                <span class="block aspect-a4-portrait overflow-hidden rounded-control border-2 bg-canvas" :class="background?.id === item.id ? 'border-accent' : 'border-transparent hover:border-line-strong'">
+                  <img :src="item.thumb" alt="" loading="lazy" class="size-full object-cover">
+                </span>
+                <span class="mt-1 block truncate text-xs" x-text="item.name"></span>
+              </button>
+            </template>
+          </div>
+          <p class="py-6 text-center text-sm text-ink-muted" x-show="! bgPicker.loading && ! bgPicker.items.length">Brak obrazów w bibliotece.</p>
+          <p class="py-3 text-center text-sm text-ink-muted" x-show="bgPicker.loading">Wczytywanie…</p>
+          <div class="mt-4 text-center" x-show="bgPicker.more && ! bgPicker.loading"><button type="button" class="{{ $secondary }}" x-on:click="bgPicker.load()">Pokaż więcej</button></div>
+        </div>
+      </div>
+    </div>
+  @endif
 </div>
 @endsection

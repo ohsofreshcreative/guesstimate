@@ -27,7 +27,9 @@ final class DocumentView
 	private static function page(array $page, array $snapshot): array
 	{
 		$key = (string) ($page['key'] ?? 'cover');
-		$page['layout'] = Pages::layout($key, $page['layout'] ?? null);
+		// Tylko strona dodatkowa ma typ różny od klucza; strony gotowe zostają bez zmian.
+		$type = Pages::isExtra($key) ? ($page['type'] = (string) ($page['type'] ?? Pages::CUSTOM)) : $key;
+		$page['layout'] = Pages::layout($type, $page['layout'] ?? null);
 		$page['image'] = Pages::hasMedia($page['layout']) ? ($page['image'] ?? null) : null;
 		$page['hidden'] ??= null;
 		$fields = FieldLayout::normalize($page['fields'] ?? null, $key);
@@ -38,9 +40,9 @@ final class DocumentView
 		}
 
 		if (! isset($page['heading'])) {
-			$page['heading'] = Markup::parts(Pages::HEADINGS[$key] ?? '');
+			$page['heading'] = Markup::parts(Pages::HEADINGS[$type] ?? '');
 
-			if ($key === 'pricing' && ! empty($snapshot['project_type'])) {
+			if ($type === 'pricing' && ! empty($snapshot['project_type'])) {
 				$page['heading'][] = [' ' . mb_strtolower((string) $snapshot['project_type']), false];
 			}
 		}

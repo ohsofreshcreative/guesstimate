@@ -2,6 +2,7 @@
 
 namespace App\Guesstimate\Document;
 
+use App\Guesstimate\Offers\OfferContent;
 use App\Guesstimate\Support\Input;
 
 /**
@@ -119,26 +120,64 @@ final class DocumentForm
 	}
 
 	/**
-	 * Wygląd stron z edytora wizualnego: układ, tło, dopasowanie tła, zdjęcie strony, nagłówek, widoczność.
-	 * Klucze spoza Pages::TYPES są pomijane; brakujące pola zostają bez zmian.
+	 * Wygląd stron z edytora wizualnego: układ, tło, dopasowanie tła, zdjęcie strony, nagłówek, widoczność,
+	 * a także strony dodatkowe (własne i kopie) i kolejność stron. Nieznane klucze są pomijane; brakujące pola
+	 * zostają bez zmian. Strona dodatkowa spoza podanej kolejności jest usuwana (bez kolejności nic nie znika).
 	 *
 	 * @return array{data: array|null, draft: array, errors: array<string, string>}
 	 */
-	public static function design(array $input, array $current): array
+	public static function design(array $input, array $current, mixed $order = null): array
 	{
 		$errors = [];
 		$pages = $current['pages'];
 
-		foreach (Pages::TYPES as $key => $label) {
+		if ($order !== null && ! is_array($order)) {
+			$errors['page_order'] = 'Nieprawidłowa kolejność stron.';
+			$order = null;
+		}
+
+		if ($order !== null) {
+			foreach (array_keys($pages) as $id) {
+				if (Pages::isExtra((string) $id) && ! in_array((string) $id, $order, true)) {
+					unset($pages[$id]);
+				}
+			}
+		}
+
+		foreach ($input as $id => $row) {
+			$id = (string) $id;
+
+			if (! Pages::isExtra($id) || isset($pages[$id]) || ! is_array($row) || ($order !== null && ! in_array($id, $order, true))) {
+				continue;
+			}
+
+			if (! Pages::extraType($row['type'] ?? null)) {
+				$errors["pages.{$id}.type"] = 'Nieznany typ strony.';
+				continue;
+			}
+
+			if (count(array_filter(array_keys($pages), fn ($key) => Pages::isExtra((string) $key))) >= Pages::MAX_EXTRA) {
+				$errors['page_order'] = sprintf('Najwyżej %d stron dodatkowych.', Pages::MAX_EXTRA);
+				continue;
+			}
+
+			$pages[$id] = ['type' => $row['type']] + Pages::blank($row['type']) + ($row['type'] === Pages::CUSTOM ? ['html' => ''] : []);
+		}
+
+		foreach ($pages as $key => $page) {
+			$key = (string) $key;
+
 			if (! isset($input[$key]) || ! is_array($input[$key])) {
 				continue;
 			}
 
+			$type = Pages::type($key, $page);
+			$extra = Pages::isExtra($key);
+			$label = Pages::label($key, $page);
 			$row = $input[$key];
-			$page = $pages[$key];
 
 			if (array_key_exists('layout', $row)) {
-				if (in_array($row['layout'], Pages::PAGE_LAYOUTS[$key], true)) {
+				if (in_array($row['layout'], Pages::PAGE_LAYOUTS[$type], true)) {
 					$page['layout'] = $row['layout'];
 				} else {
 					$errors["pages.{$key}.layout"] = sprintf('%s: ten układ nie jest dostępny dla tej strony.', $label);
@@ -189,7 +228,8 @@ final class DocumentForm
 				$page['image_crop'] = empty($page['image_id']) ? null : ImageCrop::normalize($row['image_crop']);
 			}
 
-			if (array_key_exists('fields', $row)) {
+			// Strony dodatkowe mają układ z szablonu (DocumentSettings::activeFields).
+			if (array_key_exists('fields', $row) && ! $extra) {
 				if ($problems = FieldLayout::rangeErrors($row['fields'], $key)) {
 					$errors["pages.{$key}.fields"] = sprintf('%s: %s', $label, $problems[0]);
 				}
@@ -202,17 +242,28 @@ final class DocumentForm
 					$errors["pages.{$key}.polish"] = sprintf('%s: %s', $label, $error);
 				}
 
-				$page['polish'] = PagePolish::normalize($row['polish'], $key, array_map('intval', (array) ($current['reference_ids'] ?? [])));
+				$page['polish'] = PagePolish::normalize($row['polish'], $type, array_map('intval', (array) ($current['reference_ids'] ?? [])));
 			}
 
-			if (array_key_exists('heading', $row) && $key !== 'cover') {
+			if (array_key_exists('heading', $row) && $type !== 'cover') {
 				$heading = mb_substr((string) (Input::line($row['heading']) ?? ''), 0, Pages::MAX_HEADING);
-				// Pusty nagłówek = nagłówek domyślny strony.
-				$page['heading'] = $heading === '' || $heading === Pages::HEADINGS[$key] ? null : $heading;
+				// Pusty nagłówek = nagłówek domyślny strony (własna strona nie ma domyślnego).
+				$page['heading'] = $heading === '' || $heading === (Pages::HEADINGS[$type] ?? null) ? null : $heading;
+			}
+
+			if (array_key_exists('html', $row) && $type === Pages::CUSTOM) {
+				$html = OfferContent::clean($row['html']);
+
+				if (mb_strlen($html) > Pages::MAX_CUSTOM_HTML) {
+					$errors["pages.{$key}.html"] = sprintf('%s: treść jest za długa.', $label);
+					$html = mb_substr($html, 0, Pages::MAX_CUSTOM_HTML);
+				}
+
+				$page['html'] = $html;
 			}
 
 			if (array_key_exists('enabled', $row)) {
-				if (! in_array($key, Pages::OPTIONAL, true) && ! $row['enabled']) {
+				if (! $extra && ! in_array($key, Pages::OPTIONAL, true) && ! $row['enabled']) {
 					$errors["pages.{$key}.enabled"] = sprintf('Strony „%s” nie można wyłączyć.', $label);
 				} else {
 					$page['enabled'] = (bool) $row['enabled'];
@@ -222,7 +273,7 @@ final class DocumentForm
 			$pages[$key] = $page;
 		}
 
-		$data = array_replace($current, ['pages' => $pages]);
+		$data = array_replace($current, ['pages' => $pages, 'page_order' => Pages::order($pages, $order ?? ($current['page_order'] ?? null))]);
 
 		return ['data' => $errors ? null : $data, 'draft' => $data, 'errors' => $errors];
 	}

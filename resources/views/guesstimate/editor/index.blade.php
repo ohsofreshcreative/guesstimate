@@ -118,6 +118,7 @@
     <aside class="flex w-full shrink-0 flex-col border-line bg-surface lg:w-96 lg:border-l" x-show="showPanel" aria-label="Ustawienia strony">
       <div class="flex border-b border-line" role="tablist">
         <button type="button" role="tab" class="flex-1 px-4 py-2.5 text-sm font-medium" :class="tab === 'page' ? 'border-b-2 border-accent text-ink' : 'text-ink-muted hover:text-ink'" :aria-selected="tab === 'page'" x-on:click="tab = 'page'">Strona</button>
+        <button type="button" role="tab" class="flex-1 px-4 py-2.5 text-sm font-medium" :class="tab === 'structure' ? 'border-b-2 border-accent text-ink' : 'text-ink-muted hover:text-ink'" :aria-selected="tab === 'structure'" x-on:click="tab = 'structure'" data-tab-structure>Strony</button>
         <button type="button" role="tab" class="flex-1 px-4 py-2.5 text-sm font-medium" :class="tab === 'publish' ? 'border-b-2 border-accent text-ink' : 'text-ink-muted hover:text-ink'" :aria-selected="tab === 'publish'" x-on:click="tab = 'publish'">Publikacja</button>
       </div>
 
@@ -131,6 +132,10 @@
             @include('guesstimate.editor.partials.layout-mode')
             @include('guesstimate.editor.partials.page')
           </fieldset>
+        </div>
+
+        <div x-show="tab === 'structure'" x-cloak>
+          @include('guesstimate.editor.partials.structure')
         </div>
 
         <div x-show="tab === 'publish'" x-cloak>

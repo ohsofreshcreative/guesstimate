@@ -22,6 +22,7 @@ class ContractVersion extends Model
 		'template_version_id' => 'integer',
 		'offer_version_id' => 'integer',
 		'data_snapshot' => 'array',
+		'background_id' => 'integer',
 		'created_by' => 'integer',
 		'approved_by' => 'integer',
 		'approved_at' => 'datetime',
@@ -30,6 +31,18 @@ class ContractVersion extends Model
 	public function contract(): BelongsTo
 	{
 		return $this->belongsTo(Contract::class, 'contract_id')->withTrashed();
+	}
+
+	/**
+	 * Tło stron: zatwierdzona wersja ma własną kopię z chwili zatwierdzenia, szkic pokazuje bieżące tło szablonu.
+	 */
+	public function backgroundId(): ?int
+	{
+		if ($this->isApproved()) {
+			return $this->background_id ?: null;
+		}
+
+		return $this->contract?->template?->background_id ?: null;
 	}
 
 	public function templateVersion(): BelongsTo

@@ -174,6 +174,7 @@ final class Media
 				'id' => $p->ID,
 				'name' => $p->post_title ?: basename((string) get_attached_file($p->ID)),
 				'thumb' => self::thumb($p->ID),
+				'url' => wp_get_attachment_image_url($p->ID, 'large') ?: null,
 				'width' => $width,
 				'height' => $height,
 				'mime' => $p->post_mime_type,

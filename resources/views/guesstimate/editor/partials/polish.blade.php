@@ -1,5 +1,5 @@
 {{-- Dopracowanie strony (Document\PagePolish). Domyślne wartości nie są zapisywane, więc strona wygląda jak w szablonie. --}}
-<template x-if="selected === 'cover'">
+<template x-if="pageType === 'cover'">
   <div class="{{ $section }}" data-polish-section>
     <h3 class="font-semibold">Wygląd strony</h3>
     <label class="mt-2 block text-sm">Położenie nagłówka
@@ -9,7 +9,7 @@
   </div>
 </template>
 
-<template x-if="selected === 'pricing' || selected === 'references'">
+<template x-if="pageType === 'pricing' || pageType === 'references'">
   <div class="{{ $section }} space-y-3" data-polish-section>
     <h3 class="font-semibold">Wygląd strony</h3>
     <label class="flex items-center gap-2 text-sm">
@@ -17,7 +17,7 @@
       Ukryj boczny napis
     </label>
 
-    <template x-if="selected === 'references'">
+    <template x-if="pageType === 'references'">
       <div class="space-y-3 text-sm">
         <label class="block">Wielkość tytułów realizacji
           <select class="{{ $input }}" :value="polishValue('title_size')" x-on:change="setPolish('title_size', $event.target.value)" data-polish="title_size">

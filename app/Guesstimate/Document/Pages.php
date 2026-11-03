@@ -18,6 +18,18 @@ final class Pages
 		'contact' => 'Kontakt',
 	];
 
+	/**
+	 * Strony dodatkowe (`extra_N`): własna strona z treścią z edytora albo kopia strony gotowego typu (te same dane,
+	 * własny wygląd). Typ zapisuje się w `pages.<id>.type`, kolejność wszystkich stron w `document.page_order`.
+	 */
+	public const CUSTOM = 'custom';
+	public const CUSTOM_LABEL = 'Własna strona';
+	public const MAX_EXTRA = 12;
+	public const MAX_CUSTOM_HTML = 20000;
+	private const EXTRA_ID = '/^extra_[1-9][0-9]{0,2}$/';
+	/** Bez kopii: dopasowanie typografii „Sytuacji” mierzy jedną stronę. */
+	public const NO_COPY = ['situation'];
+
 	/** Strony, które można wyłączyć dla oferty. */
 	public const OPTIONAL = ['extras', 'references', 'next_steps'];
 
@@ -39,6 +51,7 @@ final class Pages
 		'references' => ['tiles'],
 		'next_steps' => ['text_image', 'image_text', 'full'],
 		'contact' => ['text_image', 'image_text'],
+		self::CUSTOM => ['full', 'text_image', 'image_text'],
 	];
 
 	/** Układy ze zdjęciem strony obok treści. */
@@ -86,5 +99,67 @@ final class Pages
 	public static function blank(string $key, ?int $backgroundId = null): array
 	{
 		return ['enabled' => true, 'background_id' => $backgroundId, 'fit' => null, 'layout' => self::defaultLayout($key), 'image_id' => null, 'heading' => null];
+	}
+
+	public static function isExtra(string $id): bool
+	{
+		return preg_match(self::EXTRA_ID, $id) === 1;
+	}
+
+	/** Typ, który może mieć strona dodatkowa. */
+	public static function extraType(mixed $type): bool
+	{
+		return $type === self::CUSTOM || (is_string($type) && isset(self::TYPES[$type]) && ! in_array($type, self::NO_COPY, true));
+	}
+
+	/** Typ strony: klucz strony gotowej albo typ zapisany w stronie dodatkowej. */
+	public static function type(string $id, array $page = []): string
+	{
+		return isset(self::TYPES[$id]) ? $id : (string) ($page['type'] ?? self::CUSTOM);
+	}
+
+	public static function label(string $id, array $page = []): string
+	{
+		if (isset(self::TYPES[$id])) {
+			return self::TYPES[$id];
+		}
+
+		$type = self::type($id, $page);
+
+		if ($type === self::CUSTOM) {
+			$heading = trim(str_replace('**', '', (string) ($page['heading'] ?? '')));
+
+			return $heading !== '' ? mb_substr($heading, 0, 60) : self::CUSTOM_LABEL;
+		}
+
+		return (self::TYPES[$type] ?? self::CUSTOM_LABEL) . ' (kopia)';
+	}
+
+	/**
+	 * Kolejność stron: zapisana kolejność bez nieznanych i powtórzonych kluczy, a brakujące strony na końcu
+	 * (gotowe w kolejności TYPES, dodatkowe według numeru — MySQL sortuje klucze JSON po swojemu).
+	 *
+	 * @return list<string>
+	 */
+	public static function order(array $pages, mixed $order): array
+	{
+		$out = [];
+
+		foreach ((array) $order as $id) {
+			if (is_string($id) && isset($pages[$id]) && ! in_array($id, $out, true)) {
+				$out[] = $id;
+			}
+		}
+
+		$extras = array_values(array_filter(array_map('strval', array_keys($pages)), fn ($id) => self::isExtra($id)));
+		usort($extras, fn ($a, $b) => (int) substr($a, 6) <=> (int) substr($b, 6));
+
+		foreach ([...array_keys(self::TYPES), ...$extras] as $id) {
+			if (isset($pages[$id]) && ! in_array($id, $out, true)) {
+				$out[] = $id;
+			}
+		}
+
+		return $out;
 	}
 }

@@ -73,7 +73,7 @@ namespace Tests\Unit\Media {
 		{
 			$this->assertFalse(MediaUsage::inUse(MediaUsage::NONE));
 
-			foreach (['published' => ['OSF/1'], 'versions' => ['OSF/1'], 'backgrounds' => ['Tło'], 'cases' => ['Britannia'], 'logo' => true] as $key => $value) {
+			foreach (['published' => ['OSF/1'], 'versions' => ['OSF/1'], 'backgrounds' => ['Tło'], 'cases' => ['Britannia'], 'logo' => true, 'contracts' => ['umowa #1']] as $key => $value) {
 				$this->assertTrue(MediaUsage::inUse([$key => $value]), $key);
 			}
 		}
@@ -85,6 +85,7 @@ namespace Tests\Unit\Media {
 				'używają go: opublikowane oferty OSF/1; tła Tło; logo dokumentu',
 				MediaUsage::summary(['published' => ['OSF/1'], 'backgrounds' => ['Tło'], 'logo' => true]),
 			);
+			$this->assertSame('używają go: tła umów: szablon „Umowa”', MediaUsage::summary(['contracts' => ['szablon „Umowa”']]));
 			$this->assertStringContainsString('i 2 więcej', MediaUsage::summary(['versions' => ['1', '2', '3', '4', '5', '6', '7']]));
 		}
 	}
