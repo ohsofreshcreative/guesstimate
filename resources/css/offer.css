@@ -112,6 +112,18 @@
   & li + li { margin-top: calc(var(--fit-gap, 1em) * 0.35); }
   & li::marker { color: var(--color-paper-soft); }
   & a { color: var(--color-orange); text-decoration: underline; text-underline-offset: 3px; }
+  /* Nagłówki H3–H5: tylko treść własnej strony; rozmiar w em, więc skaluje się z tekstem strony. */
+  & h3, & h4, & h5 { color: var(--color-paper); font-weight: 700; line-height: 1.25; }
+  & h3 { font-size: 1.6em; }
+  & h4 { font-size: 1.3em; }
+  & h5 { font-size: 1.1em; }
+  & > * + :is(h3, h4, h5) { margin-top: calc(var(--fit-gap, 1em) * 1.6); }
+  /* Kolory tekstu własnej strony (OfferContent::COLORS); selektor w osf-prose wygrywa z kolorem akapitu. */
+  & .osf-c-indigo { color: var(--color-indigo); }
+  & .osf-c-magenta { color: var(--color-magenta); }
+  & .osf-c-violet { color: var(--color-violet); }
+  & .osf-c-flame { color: var(--color-flame); }
+  & .osf-c-orange { color: var(--color-gradient-start); }
 }
 
 /*--- Dokument: strony A4 poziomo (297 × 210 mm) ---*/

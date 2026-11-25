@@ -31,6 +31,13 @@
   --color-rail-muted: #8790a1;
 
   /* akcent i stany */
+  /* Paleta kolorów tekstu dokumentu oferty (te same wartości co w offer.css). */
+  --color-doc-indigo: #4a4af0;
+  --color-doc-magenta: #a832c2;
+  --color-doc-violet: #6a35d8;
+  --color-doc-flame: #e2452e;
+  --color-doc-orange: #efa43a;
+
   --color-accent: #0f6b62;
   --color-accent-strong: #0a524b;
   --color-accent-soft: #dcefeb;
@@ -94,10 +101,23 @@
   & li + li { margin-top: 0.25em; }
   & a { color: var(--color-accent); text-decoration: underline; }
   & strong, & b { font-weight: 600; }
-  & h3 { font-weight: 600; margin-top: 1em; }
+  & h3, & h4, & h5 { font-weight: 600; margin-top: 1em; }
+  & h3 { font-size: 1.25em; }
+  & h4 { font-size: 1.1em; }
+  & .osf-c-indigo { color: var(--color-doc-indigo); }
+  & .osf-c-magenta { color: var(--color-doc-magenta); }
+  & .osf-c-violet { color: var(--color-doc-violet); }
+  & .osf-c-flame { color: var(--color-doc-flame); }
+  & .osf-c-orange { color: var(--color-doc-orange); }
 }
 
 /*--- SZABLON UMOWY: PAPIER A4 PIONOWO ---*/
+/* Krój i miary jak w eksporcie PDF (PdfExporter::STYLE): ten sam font daje ten sam podział stron w panelu i w PDF. */
+@font-face { font-family: 'GST DejaVu Sans'; src: url('../fonts/dejavu/DejaVuSans.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'GST DejaVu Sans'; src: url('../fonts/dejavu/DejaVuSans-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'GST DejaVu Sans'; src: url('../fonts/dejavu/DejaVuSans-Oblique.ttf') format('truetype'); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: 'GST DejaVu Sans'; src: url('../fonts/dejavu/DejaVuSans-BoldOblique.ttf') format('truetype'); font-weight: 700; font-style: italic; font-display: swap; }
+
 /* Wymiary w mm i pt, bo to wymiary kartki, a nie interfejsu. Podgląd jest przybliżeniem, nie obietnicą zgodności z Wordem. */
 .ct-paper,
 .ct-sheet {
@@ -109,21 +129,47 @@
 
 .ct-paper {
   min-height: 297mm;
-  padding: 20mm;
+  /* Układ strony z ustawień (PageSetup::css): nagłówek w swojej odległości od krawędzi, boki na marginesach. */
+  padding: var(--ct-header, 20mm) var(--ct-right, 20mm) var(--ct-footer, 20mm) var(--ct-left, 20mm);
+}
+
+/* Treść zaczyna się na marginesie albo pod nagłówkiem (jak w Wordzie): pole nagłówka sięga co najmniej do marginesu. */
+.ct-sheet-header,
+.ct-paper-header {
+  min-height: max(0mm, calc(var(--ct-top, 20mm) - var(--ct-header, 20mm) - 3mm));
+}
+
+.ct-sheet-footer,
+.ct-paper-footer {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: max(0mm, calc(var(--ct-bottom, 20mm) - var(--ct-footer, 20mm) - 3mm));
+}
+
+.ct-paper.ct-pages {
+  /* Edycja na rozdzielonych kartkach: tło i cień ma każda kartka (.ct-page-bg), papier jest przezroczysty. */
+  background: none;
+  box-shadow: none;
+}
+
+.ct-page-bg {
+  background: var(--ct-bg, none) center top / 100% 100% no-repeat, var(--color-surface);
+  box-shadow: var(--shadow-overlay);
 }
 
 .ct-sheet {
   display: flex;
   flex-direction: column;
   height: 297mm;
-  padding: 20mm;
+  padding: var(--ct-header, 20mm) var(--ct-right, 20mm) var(--ct-footer, 20mm) var(--ct-left, 20mm);
   overflow: hidden;
 }
 
 .ct-sheet-body {
   flex: 1;
   min-height: 0;
-  margin-block: 4mm;
+  margin-block: 3mm; /* PdfExporter::GAP */
 }
 
 .ct-region {
@@ -147,8 +193,9 @@
 }
 
 .ct-doc {
-  font-size: 11pt;
-  line-height: 1.45;
+  font-family: 'GST DejaVu Sans', 'DejaVu Sans', sans-serif;
+  font-size: 10pt;
+  line-height: 1.4;
   color: var(--color-ink);
   overflow-wrap: anywhere;
 }
@@ -165,9 +212,9 @@
   margin-block: 0 2.5mm;
 }
 
-.ct-doc h1 { font-size: 16pt; font-weight: 700; margin-block: 4mm 3mm; }
-.ct-doc h2 { font-size: 13pt; font-weight: 700; margin-block: 4mm 2.5mm; }
-.ct-doc h3 { font-size: 11pt; font-weight: 700; margin-block: 3mm 2mm; }
+.ct-doc h1 { font-size: 15pt; font-weight: 700; margin-block: 4mm 3mm; }
+.ct-doc h2 { font-size: 12pt; font-weight: 700; margin-block: 4mm 2.5mm; }
+.ct-doc h3 { font-size: 10pt; font-weight: 700; margin-block: 3mm 2mm; }
 .ct-doc strong { font-weight: 700; }
 .ct-doc em { font-style: italic; }
 .ct-doc u { text-decoration: underline; }
@@ -175,7 +222,9 @@
 .ct-doc ol { list-style: decimal; padding-left: 6mm; }
 .ct-doc table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .ct-doc td,
-.ct-doc th { border: 1px solid var(--color-line-strong); padding: 1.5mm 2mm; vertical-align: top; }
+.ct-doc th { border: 1px solid var(--color-line-strong); padding: 1.5mm 2mm; vertical-align: top; font-size: 8.5pt; }
+.ct-doc td p,
+.ct-doc th p { margin: 0; }
 .ct-doc td > :last-child,
 .ct-doc th > :last-child { margin-bottom: 0; }
 
@@ -190,7 +239,7 @@
   content: '§ ' counter(ct-par) '. ';
 }
 
-.ct-doc .ct-small { font-size: 9pt; }
+.ct-doc .ct-small { font-size: 8pt; }
 .ct-doc .ct-center { text-align: center; }
 .ct-doc .ct-right { text-align: right; }
 .ct-doc .ct-justify { text-align: justify; }

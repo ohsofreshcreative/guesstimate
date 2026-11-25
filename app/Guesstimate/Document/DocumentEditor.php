@@ -60,7 +60,7 @@ final class DocumentEditor
 				'fields' => $extra ? null : FieldLayout::normalize($page['fields'] ?? null, $key),
 				'polish' => PagePolish::normalize($page['polish'] ?? null, $type),
 				'heading' => $page['heading'] ?? null,
-			] + ($type === Pages::CUSTOM ? ['html' => (string) ($page['html'] ?? '')] : []);
+			] + (Pages::isCustom($type) ? ['html' => (string) ($page['html'] ?? '')] : []) + (isset(Pages::CUSTOM_ITEMS[$type]) ? ['items' => array_values((array) ($page['items'] ?? []))] : []);
 		}
 
 		return ['content' => OfferContent::normalize($version->content), 'document' => $doc];
@@ -120,10 +120,12 @@ final class DocumentEditor
 		// Definicje typów stron; lista stron (gotowe i dodatkowe) wynika ze stanu: document.page_order.
 		$types = [];
 
-		foreach (Pages::TYPES + [Pages::CUSTOM => Pages::CUSTOM_LABEL] as $key => $label) {
+		foreach (Pages::TYPES + Pages::CUSTOM_TYPES as $key => $label) {
 			$types[$key] = [
 				'type' => $key,
-				'label' => $label,
+				'label' => $key === Pages::CUSTOM ? Pages::CUSTOM_LABEL : $label,
+				'custom' => Pages::isCustom($key),
+				'items' => Pages::CUSTOM_ITEMS[$key] ?? null,
 				'optional' => in_array($key, Pages::OPTIONAL, true),
 				'fit' => in_array($key, Pages::FIT, true),
 				'copyable' => Pages::extraType($key),
@@ -146,6 +148,7 @@ final class DocumentEditor
 				'state' => $state,
 				'types' => $types,
 				'maxExtraPages' => Pages::MAX_EXTRA,
+				'customTypes' => Pages::CUSTOM_TYPES,
 				'library' => DocumentDesigner::library(),
 				'folders' => MediaLibrary::tree(MediaLibrary::folders()),
 				'versionId' => $version->id,

@@ -15,6 +15,7 @@ const STYLES = {
 const ALIGN = ['ct-center', 'ct-right', 'ct-justify'];
 const BLOCKS = 'p,h1,h2,h3,li,td,th';
 const HISTORY = 100;
+const PAGE_GAP = 24;
 const escape = (text) => text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 export default (config) => ({
@@ -30,13 +31,21 @@ export default (config) => ({
   range: null,
   past: [],
   future: [],
-  breaks: [],
+  // Rozdzielone kartki w edycji: pozycje w px liczone z pomiaru, ten sam podział co podgląd i eksport.
+  sheets: [{ page: 1, top: 0 }],
+  pageHeight: 0,
+  page: { header: 0, footer: 0, left: 0, right: 0 },
+  footerHeight: 0,
+  footerStyle: '',
+  headerHtml: '',
+  footerHtml: '',
   // Tło stron z biblioteki grafik; zapis razem z szablonem.
   background: config.background,
   bgPicker: mediaPick({ url: config.urls.media }),
 
   init() {
-    this.$nextTick(() => this.markBreaks());
+    // Podział zależy od kroju dokumentu, więc liczymy go po wczytaniu fontów.
+    document.fonts.ready.then(() => this.markBreaks());
     if (!this.editable) return;
     document.execCommand('defaultParagraphSeparator', false, 'p');
     // Starsze szkice mogą mieć pusty akapit bez wysokości, w który nie da się kliknąć.
@@ -95,21 +104,76 @@ export default (config) => ({
     this.markBreaks();
   },
 
-  /** Linie końca strony w edycji: ten sam podział co „Podgląd A4”, liczony na niewidocznej kartce. */
+  paperStyle() {
+    const sheets = this.sheets.length;
+    const height = this.pageHeight ? `height: ${sheets * (this.pageHeight + PAGE_GAP) - PAGE_GAP}px;` : '';
+    return `${height}${this.background ? `--ct-bg: url('${this.background.url}');` : ''}`;
+  },
+
+  /**
+   * Edycja na osobnych kartkach A4. Podział liczy pageStarts (ten sam co „Podgląd A4” i eksport), a treść od
+   * początku strony przesuwa na kolejną kartkę odstępem z arkusza stylów — DOM części dokumentu się nie zmienia.
+   */
   markBreaks() {
     const paper = this.$refs.paper;
     const body = this.region('body');
+    const header = this.region('header');
+    const footer = this.region('footer');
     if (!paper || !body || !this.$refs.measure || this.mode !== 'edit') return;
-    const starts = pageStarts(this.$refs.measure, { header: this.region('header').innerHTML, footer: this.region('footer').innerHTML, nodes: [...body.children] });
+
+    this.headerHtml = header.innerHTML;
+    this.footerHtml = footer.innerHTML;
+    const starts = pageStarts(this.$refs.measure, { header: this.headerHtml, footer: this.footerHtml, nodes: [...body.children] });
     this.$refs.measure.innerHTML = '';
+
+    const mm = paper.offsetWidth / 210;
+    const page = 297 * mm;
+    // Układ strony z ustawień: zmienne CSS --ct-* (PageSetup::css) na kontenerze edytora.
+    const style = getComputedStyle(paper);
+    const px = (name) => parseFloat(style.getPropertyValue(`--ct-${name}`)) * mm || 20 * mm;
+    this.page = { header: px('header'), footer: px('footer'), left: px('left'), right: px('right') };
+    this.pageHeight = page;
+    this.footerHeight = footer.offsetHeight;
+    this.$refs.spacers.textContent = '';
+
     const origin = paper.getBoundingClientRect().top;
-    this.breaks = starts.map((part, i) => {
+    const contentTop = header.getBoundingClientRect().bottom - origin + parseFloat(getComputedStyle(body).marginTop);
+    const rules = [];
+    let shift = 0;
+
+    starts.forEach((part, i) => {
       const node = body.children[part.index];
-      const rows = node?.matches('table') ? node.querySelector('tbody')?.rows : node?.children;
-      const element = part.from ? rows?.[part.from] : node;
-      return element ? { page: i + 2, top: Math.round(element.getBoundingClientRect().top - origin) } : null;
-    }).filter(Boolean);
-    this.pageCount = this.breaks.length + 1;
+      if (!node) return;
+      let element = node;
+      let selector = `.ct-pages .ct-doc-body > :nth-child(${part.index + 1})`;
+      if (part.from && node.matches('table')) {
+        element = node.querySelector('tbody')?.rows[part.from];
+        selector += ` > tbody > tr:nth-child(${part.from + 1}) > *`;
+      } else if (part.from) {
+        element = node.children[part.from];
+        selector += ` > :nth-child(${part.from + 1})`;
+      }
+      if (!element) return;
+
+      const target = (i + 1) * (page + PAGE_GAP) + contentTop;
+      const extra = Math.max(0, target - (element.getBoundingClientRect().top - origin + shift));
+      shift += extra;
+      if (element.matches('tr')) {
+        const cell = element.cells[0];
+        rules.push(`${selector} { padding-top: ${parseFloat(cell ? getComputedStyle(cell).paddingTop : 0) + extra}px; }`);
+      } else {
+        // Marginesy sąsiadów się łączą, więc liczymy od większego z nich.
+        const previous = element.previousElementSibling;
+        const base = Math.max(parseFloat(getComputedStyle(element).marginTop), previous ? parseFloat(getComputedStyle(previous).marginBottom) : 0);
+        rules.push(`${selector} { margin-top: ${base + extra}px !important; }`);
+      }
+    });
+
+    this.$refs.spacers.textContent = rules.join('\n');
+    this.sheets = Array.from({ length: starts.length + 1 }, (_, i) => ({ page: i + 1, top: i * (page + PAGE_GAP) }));
+    const last = this.sheets[this.sheets.length - 1].top;
+    this.footerStyle = `position: absolute; left: ${this.page.left}px; right: ${this.page.right}px; top: ${last + page - this.page.footer - this.footerHeight}px`;
+    this.pageCount = this.sheets.length;
   },
 
   setBackground(item) {

@@ -21,7 +21,7 @@
     <button type="button" class="{{ $secondary }}" x-show="page.copyable" x-on:click="duplicatePage()" :disabled="extraCount >= {{ $config['maxExtraPages'] }}" data-page-duplicate>Duplikuj stronę</button>
     <button type="button" class="{{ $ghost }} text-danger" x-show="page.extra" x-on:click="removePage()" data-page-remove>Usuń stronę</button>
   </div>
-  <p class="mt-2 text-xs text-ink-muted" x-show="page.extra && pageType !== 'custom'">Kopia ma własny wygląd (układ, tło, zdjęcie, nagłówek), a treść bierze z tych samych danych co strona „<span x-text="types[pageType].label"></span>”.</p>
+  <p class="mt-2 text-xs text-ink-muted" x-show="page.extra && ! page.custom">Kopia ma własny wygląd (układ, tło, zdjęcie, nagłówek), a treść bierze z tych samych danych co strona „<span x-text="types[pageType].label"></span>”.</p>
   <p class="mt-2 text-sm text-ink-muted" x-show="hiddenReason(selected) === 'empty'">Strona nie ma jeszcze treści — klient jej nie zobaczy, dopóki jej nie uzupełnisz.</p>
   <p class="mt-2 text-sm text-ink-muted" x-show="hiddenReason(selected) === 'disabled'">Strona jest wyłączona — klient jej nie zobaczy.</p>
 
@@ -51,20 +51,58 @@
     <div {!! $field('heading') !!}>
       <label class="{{ $label }}" for="f-ed-heading">Nagłówek strony</label>
       <input type="text" id="f-ed-heading" class="{{ $input }}" x-model="pageState.heading" maxlength="160" :placeholder="(page.default_heading || '').replaceAll('**', '')">
-      <p class="mt-1 text-xs text-ink-muted" x-text="pageType === 'custom' ? 'Puste pole = strona bez nagłówka. **słowo** = pomarańczowe.' : 'Puste pole = nagłówek domyślny. **słowo** = pomarańczowe.'"></p>
+      <p class="mt-1 text-xs text-ink-muted" x-text="page.custom ? 'Puste pole = strona bez nagłówka. **słowo** = pomarańczowe.' : 'Puste pole = nagłówek domyślny. **słowo** = pomarańczowe.'"></p>
       <p class="mt-1 text-xs text-danger" x-text="fieldError(`document.pages.${selected}.heading`)"></p>
     </div>
   </template>
 
   {{-- Własna strona: treść z edytora WYSIWYG. x-for z kluczem strony odświeża edytor przy przejściu na inną własną stronę. --}}
-  <template x-for="id in (pageType === 'custom' ? [selected] : [])" :key="id">
+  <template x-for="id in (page.custom ? [selected] : [])" :key="id">
     <div {!! $field('html') !!}>
-      <p class="{{ $label }}">Treść strony</p>
+      <p class="{{ $label }}" x-text="page.items ? 'Wstęp (opcjonalnie)' : 'Treść strony'"></p>
       <div x-data="richText()" x-modelable="html" x-model="pageState.html" class="min-w-0">
-        @include('guesstimate.partials.rich-text-body', ['label' => 'Treść strony', 'id' => 'f-ed-custom-html'])
+        @include('guesstimate.partials.rich-text-body', ['label' => 'Treść strony', 'id' => 'f-ed-custom-html', 'headings' => true])
       </div>
       <p class="mt-1 text-xs text-ink-muted">Treść dłuższa niż strona A4 przechodzi na kolejną stronę („cd.”).</p>
       <p class="mt-1 text-xs text-danger" x-text="fieldError(`document.pages.${selected}.html`)"></p>
+    </div>
+  </template>
+
+  {{-- Pozycje własnej strony: tabela (nazwa, opis, cena), kafelki (tytuł, tekst), kroki (krok, dopisek). --}}
+  <template x-if="page.items">
+    <div class="space-y-2" {!! $field('items') !!}>
+      <p class="text-sm font-medium" x-text="{ custom_table: 'Pozycje tabeli', custom_tiles: 'Kafelki', custom_steps: 'Kroki' }[pageType] + ` (${pageState.items.length}/${page.items.max})`"></p>
+      <template x-for="(row, index) in pageState.items" :key="index">
+        <div class="space-y-1.5 rounded-control border border-line p-2.5">
+          <div class="flex items-center gap-1">
+            <span class="text-xs font-medium text-ink-muted" x-text="index + 1"></span>
+            <button type="button" class="ml-auto rounded-control px-1.5 text-ink-muted hover:bg-canvas disabled:opacity-30" x-on:click="moveItem(index, -1)" :disabled="index === 0" aria-label="Przenieś wyżej">↑</button>
+            <button type="button" class="rounded-control px-1.5 text-ink-muted hover:bg-canvas disabled:opacity-30" x-on:click="moveItem(index, 1)" :disabled="index === pageState.items.length - 1" aria-label="Przenieś niżej">↓</button>
+            <button type="button" class="rounded-control px-1.5 text-xs text-danger hover:bg-danger-soft" x-on:click="removeRow(pageState.items, index)">Usuń</button>
+          </div>
+          <template x-if="pageType === 'custom_table'">
+            <div class="space-y-1.5">
+              <input type="text" class="{{ $input }}" x-model="row.name" maxlength="120" placeholder="Nazwa pozycji" aria-label="Nazwa pozycji">
+              <input type="text" class="{{ $input }}" x-model="row.price" maxlength="120" placeholder="Cena (tekst)" aria-label="Cena">
+              <textarea rows="2" class="{{ $input }}" x-model="row.description" maxlength="600" placeholder="Opis — każda linia to punkt" aria-label="Opis"></textarea>
+            </div>
+          </template>
+          <template x-if="pageType === 'custom_tiles'">
+            <div class="space-y-1.5">
+              <input type="text" class="{{ $input }}" x-model="row.title" maxlength="120" placeholder="Tytuł kafelka" aria-label="Tytuł kafelka">
+              <textarea rows="3" class="{{ $input }}" x-model="row.text" maxlength="600" placeholder="Tekst kafelka" aria-label="Tekst kafelka"></textarea>
+            </div>
+          </template>
+          <template x-if="pageType === 'custom_steps'">
+            <div class="space-y-1.5">
+              <input type="text" class="{{ $input }}" x-model="row.title" maxlength="140" placeholder="Krok" aria-label="Krok">
+              <input type="text" class="{{ $input }}" x-model="row.note" maxlength="140" placeholder="Dopisek, np. (1–3 dni)" aria-label="Dopisek">
+            </div>
+          </template>
+        </div>
+      </template>
+      <button type="button" class="{{ $secondary }}" x-on:click="addItem()" :disabled="pageState.items.length >= page.items.max">+ Dodaj pozycję</button>
+      <p class="text-xs text-danger" x-text="fieldError(`document.pages.${selected}.items`)"></p>
     </div>
   </template>
 

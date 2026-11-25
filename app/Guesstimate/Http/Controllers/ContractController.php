@@ -13,6 +13,10 @@ use App\Guesstimate\Contracts\ContractSnapshot;
 use App\Guesstimate\Contracts\ContractStatus;
 use App\Guesstimate\Contracts\ContractTemplate;
 use App\Guesstimate\Contracts\ContractValues;
+use App\Guesstimate\Contracts\DraftConflict;
+use App\Guesstimate\Contracts\PageSetup;
+use App\Guesstimate\Contracts\TemplateForm;
+use App\Guesstimate\Contracts\TemplateVariables;
 use App\Guesstimate\Contracts\ContractVersion;
 use App\Guesstimate\Contracts\PaymentSchedule;
 use App\Guesstimate\Contracts\TemplateDocument;
@@ -22,6 +26,7 @@ use App\Guesstimate\Offers\OfferPolicy;
 use App\Guesstimate\Settings\SettingsRepository;
 use App\Guesstimate\Support\Format;
 use App\Guesstimate\Support\Input;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
 
@@ -117,7 +122,7 @@ class ContractController extends Controller
 			'versions' => $versions,
 			'editable' => $editable,
 			'regions' => array_map(fn ($part) => ContractValues::render(ContractHtml::clean($part), $snapshot), TemplateDocument::parse($body)),
-			'background' => Media::image($version->backgroundId(), 'large')['url'] ?? null,
+			'background' => Media::image($version->backgroundId(), 'full')['url'] ?? null,
 			'fields' => ContractValues::fields($body, $snapshot),
 			'missing' => ContractValues::missing($body, $snapshot),
 			'changes' => $changes,
@@ -125,6 +130,8 @@ class ContractController extends Controller
 			'expected' => $version->snapshotHash(),
 			'draft' => $current,
 			'canApprove' => $current && $this->policy->canApprove(),
+			'pageCss' => PageSetup::current()->css(),
+			'canRevise' => $version->id === $contract->current_version_id && $version->isApproved() && $this->policy->canEdit($contract),
 			'blockers' => $current ? array_merge(ContractValues::missing($body, $snapshot) ? ['Uzupełnij puste pola umowy.'] : [], PaymentSchedule::blockers($snapshot)) : [],
 		]);
 	}
@@ -181,7 +188,7 @@ class ContractController extends Controller
 		abort_unless($version, 404);
 
 		try {
-			$bytes = ContractExport::file($version, $format, $contract->title);
+			$bytes = ContractExport::file($version, $format, $contract->title, ContractExport::breaks((string) $request->query('strony', '')));
 		} catch (InvalidArgumentException $e) {
 			return $this->redirectWith(route('gst.contracts.show', $contract), $e->getMessage(), 'error');
 		}
@@ -194,6 +201,80 @@ class ContractController extends Controller
 			'Content-Length' => (string) strlen($bytes),
 			'X-Content-Type-Options' => 'nosniff',
 		]);
+	}
+
+	/**
+	 * Edycja treści umowy: ten sam edytor co szablon, na szkicu bieżącej wersji. Tokeny zostają tokenami,
+	 * wartości podstawia podgląd umowy. Zatwierdzona wersja nie jest edytowana — najpierw nowa wersja.
+	 */
+	public function edit(Contract $contract)
+	{
+		abort_unless($this->policy->canView($contract), 403);
+
+		$version = ContractVersion::findOrFail($contract->current_version_id);
+
+		if ($version->status !== ContractStatus::Draft || ! $this->policy->canEdit($contract)) {
+			return $this->redirectWith(route('gst.contracts.show', $contract), 'Tę wersję można tylko oglądać. Żeby zmienić umowę, utwórz nową wersję.', 'error');
+		}
+
+		$background = $version->backgroundId();
+
+		return view('guesstimate.contracts.edit', [
+			'pageCss' => PageSetup::current()->css(),
+			'contract' => $contract,
+			'version' => $version,
+			'editable' => true,
+			'regions' => array_map([ContractHtml::class, 'clean'], TemplateDocument::parse((string) $version->body)),
+			'variables' => TemplateVariables::GROUPS,
+			'config' => [
+				'editable' => true,
+				'hash' => hash('sha256', (string) $version->body),
+				'name' => $contract->title,
+				'description' => '',
+				'background' => $background ? ['id' => $background, 'url' => Media::image($background, 'full')['url'] ?? null, 'thumb' => Media::thumb($background)] : null,
+				'labels' => TemplateVariables::all(),
+				'urls' => [
+					'save' => route('gst.contracts.text', $contract),
+					'media' => route('gst.media.index'),
+				],
+			],
+		]);
+	}
+
+	public function saveText(Request $request, Contract $contract): JsonResponse
+	{
+		abort_unless($this->policy->canView($contract), 403);
+
+		$document = TemplateForm::document($request->all());
+
+		if ($document['errors']) {
+			return response()->json(['error' => reset($document['errors']), 'errors' => $document['errors']], 422);
+		}
+
+		try {
+			$hash = $request->input('hash');
+			$version = $this->contracts->saveDraft($contract, $document['body'], is_string($hash) ? $hash : null);
+		} catch (DraftConflict $e) {
+			return response()->json(['error' => $e->getMessage()], 409);
+		} catch (InvalidArgumentException $e) {
+			return response()->json(['error' => $e->getMessage()], 422);
+		}
+
+		return response()->json(['hash' => hash('sha256', (string) $version->body), 'regions' => TemplateDocument::parse((string) $version->body)]);
+	}
+
+	/** Poprawka zatwierdzonej umowy: nowy szkic z kopią treści, wartości i płatności. Zatwierdzona wersja zostaje. */
+	public function newVersion(Contract $contract)
+	{
+		abort_unless($this->policy->canView($contract), 403);
+
+		try {
+			$this->contracts->newVersion($contract);
+		} catch (InvalidArgumentException $e) {
+			return $this->redirectWith(route('gst.contracts.show', $contract), $e->getMessage(), 'error');
+		}
+
+		return $this->redirectWith(route('gst.contracts.show', $contract), 'Utworzono nową wersję roboczą. Poprzednia, zatwierdzona wersja zostaje bez zmian.');
 	}
 
 	public function saveValues(Request $request, Contract $contract)

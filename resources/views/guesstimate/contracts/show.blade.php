@@ -11,7 +11,8 @@
 @section('title', $contract->title)
 
 @section('content')
-<div class="flex h-full flex-col">
+{{-- contractPreview na całym widoku: linki eksportu dostają podział stron z podglądu. --}}
+<div class="flex h-full flex-col" style="{{ $pageCss }}" x-data="contractPreview">
   <header class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface px-4 py-2">
     <div class="flex min-w-0 items-center gap-3">
       <a href="{{ route('gst.contracts.index') }}" class="{{ $secondary }}">Umowy</a>
@@ -21,12 +22,21 @@
       <p class="truncate font-semibold">{{ $contract->title }}</p>
       <span class="shrink-0 text-sm text-ink-muted">v{{ $version->version_no }} · {{ $version->status->label() }}</span>
     </div>
+    <div class="flex items-center gap-2">
+    @if ($editable)
+      <a href="{{ route('gst.contracts.edit', $contract) }}" class="{{ $secondary }}">Edytuj treść</a>
+    @elseif ($canRevise)
+      <button type="button" class="{{ $secondary }}" x-on:click="$dispatch('open-modal', 'contract-revise')">Edytuj umowę</button>
+    @endif
     @if ($version->isApproved() && $version->isIntact())
       <div class="flex items-center gap-2">
-        <a href="{{ route('gst.contracts.export', ['contract' => $contract, 'format' => 'pdf', 'wersja' => $version->version_no]) }}" class="{{ $secondary }}">Pobierz PDF</a>
-        <a href="{{ route('gst.contracts.export', ['contract' => $contract, 'format' => 'docx', 'wersja' => $version->version_no]) }}" class="{{ $secondary }}">Pobierz DOCX</a>
+        @foreach (['pdf' => 'Pobierz PDF', 'docx' => 'Pobierz DOCX'] as $format => $formatLabel)
+          @php $exportUrl = route('gst.contracts.export', ['contract' => $contract, 'format' => $format, 'wersja' => $version->version_no]); @endphp
+          <a href="{{ $exportUrl }}" x-bind:href="exportUrl(@js($exportUrl))" class="{{ $secondary }}">{{ $formatLabel }}</a>
+        @endforeach
       </div>
     @endif
+    </div>
   </header>
 
   @if ($version->isApproved() && ! $version->isIntact())
@@ -34,11 +44,11 @@
   @endif
 
   <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
-    <div class="min-w-0 shrink-0 overflow-auto bg-canvas px-6 py-6 lg:flex-1" x-data="contractPreview">
+    <div class="min-w-0 shrink-0 overflow-auto bg-canvas px-6 py-6 lg:flex-1">
       <div hidden x-ref="header">{!! $regions['header'] !!}</div>
       <div hidden x-ref="footer">{!! $regions['footer'] !!}</div>
       <div hidden x-ref="body">{!! $regions['body'] !!}</div>
-      <p class="mb-3 text-center text-sm text-ink-soft"><span x-text="pageCount"></span> str. Układ jest przybliżony: podział stron w eksporcie i w Wordzie może się różnić.</p>
+      <p class="mb-3 text-center text-sm text-ink-soft"><span x-text="pageCount"></span> str. Pobrany PDF i DOCX mają ten sam podział stron co ten podgląd.</p>
       <p class="mb-3 text-center text-sm text-danger" role="alert" x-show="overflow" x-cloak>Część treści nie mieści się na stronie.</p>
       <div class="mx-auto flex w-fit flex-col gap-6" x-ref="sheets"@if ($background) style="--ct-bg: url('{{ $background }}')"@endif></div>
     </div>
@@ -132,6 +142,18 @@
     </aside>
   </div>
 </div>
+
+@if ($canRevise)
+  <x-gst.modal id="contract-revise" title="Edytować zatwierdzoną umowę?">
+    <p>Powstanie nowa wersja robocza v{{ $versions->max('version_no') + 1 }} z tą samą treścią, wartościami i płatnościami, a dane oferty zostaną pobrane na nowo. Zatwierdzona wersja v{{ $version->version_no }} zostaje bez zmian w historii.</p>
+    <p class="mt-3">Nową wersję można edytować, a potem trzeba ją ponownie zatwierdzić.</p>
+    <form method="post" action="{{ route('gst.contracts.new-version', $contract) }}" class="mt-5 flex justify-end gap-2">
+      <x-gst.csrf />
+      <button type="button" class="{{ $secondary }}" x-on:click="open = false">Anuluj</button>
+      <button type="submit" class="{{ $primary }}">Utwórz wersję do edycji</button>
+    </form>
+  </x-gst.modal>
+@endif
 
 @if ($canApprove && ! $blockers)
   <x-gst.modal id="contract-approve" title="Zatwierdzić umowę?">

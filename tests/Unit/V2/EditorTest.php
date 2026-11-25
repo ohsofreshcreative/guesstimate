@@ -5,8 +5,12 @@ namespace {
 		function wp_json_encode($data, $options = 0) { return json_encode($data, $options); }
 	}
 
+	if (! function_exists('sanitize_textarea_field')) {
+		function sanitize_textarea_field($text) { return trim(strip_tags((string) $text)); }
+	}
+
 	if (! function_exists('wp_kses')) {
-		function wp_kses($html, $allowed = [], $protocols = []) { return strip_tags((string) $html, '<p><strong><em><ul><ol><li><a><br>'); }
+		function wp_kses($html, $allowed = [], $protocols = []) { return strip_tags((string) $html, array_keys($allowed)); }
 	}
 }
 
@@ -45,7 +49,7 @@ namespace Tests\Unit\V2 {
 			$this->assertFalse(Pages::hasMedia('tiles'));
 
 			foreach (Pages::PAGE_LAYOUTS as $key => $layouts) {
-				$this->assertTrue(isset(Pages::TYPES[$key]) || $key === Pages::CUSTOM, $key);
+				$this->assertTrue(isset(Pages::TYPES[$key]) || Pages::isCustom($key), $key);
 				$this->assertSame([], array_diff($layouts, array_keys(Pages::LAYOUTS)));
 			}
 		}
@@ -116,6 +120,49 @@ namespace Tests\Unit\V2 {
 			$this->assertFalse($data['pages']['extra_1']['enabled']);
 			$this->assertSame('pricing', $data['pages']['extra_2']['type']);
 			$this->assertArrayNotHasKey('html', $data['pages']['extra_2']);
+		}
+
+		public function test_custom_page_keeps_headings_h3_to_h5(): void
+		{
+			$current = $this->current();
+			$result = DocumentForm::design([
+				'extra_1' => ['type' => 'custom', 'html' => '<h1 class="x">Duży</h1><h4>Średni</h4><h6>Mały</h6><h3> </h3><p>Tekst</p>'],
+			], $current, [...array_keys(Pages::TYPES), 'extra_1']);
+
+			$this->assertSame('<h3>Duży</h3><h4>Średni</h4><h5>Mały</h5><p>Tekst</p>', $result['data']['pages']['extra_1']['html']);
+			$this->assertSame('<p>Tytuł</p>', \App\Guesstimate\Offers\OfferContent::clean('<h3>Tytuł</h3>'));
+		}
+
+		public function test_custom_page_keeps_only_palette_colors(): void
+		{
+			$clean = fn ($html) => \App\Guesstimate\Offers\OfferContent::clean($html, headings: true);
+
+			$this->assertSame('<h3 class="osf-c-indigo">A</h3>', $clean('<h3 class="osf-c-indigo">A</h3>'));
+			$this->assertSame('<p>Tekst <span class="osf-c-flame">ważny</span> i zwykły</p>', $clean('<p>Tekst <span class="x osf-c-flame">ważny</span> i <span class="red">zwykły</span></p>'));
+			$this->assertSame('<h4>B</h4>', $clean('<h4 class="osf-c-pink">B</h4>'));
+		}
+
+		public function test_custom_templates_store_their_own_items(): void
+		{
+			$order = [...array_keys(Pages::TYPES), 'extra_1', 'extra_2', 'extra_3'];
+			$result = DocumentForm::design([
+				'extra_1' => ['type' => 'custom_table', 'items' => [['name' => 'Hosting', 'description' => "Serwer\nKopie", 'price' => '500 zł'], ['name' => '', 'description' => '', 'price' => ''], 'zły wiersz']],
+				'extra_2' => ['type' => 'custom_tiles', 'layout' => 'full', 'items' => [['title' => 'Szybko', 'text' => 'Opis', 'obce' => 'x']]],
+				'extra_3' => ['type' => 'custom_steps', 'items' => [['title' => '', 'note' => '(1 dzień)']]],
+			], $this->current(), $order);
+
+			$this->assertSame(['pages.extra_3.items'], array_keys($result['errors']));
+			$draft = $result['draft']['pages'];
+			$this->assertSame([['name' => 'Hosting', 'description' => "Serwer\nKopie", 'price' => '500 zł']], $draft['extra_1']['items']);
+			$this->assertSame([['title' => 'Szybko', 'text' => 'Opis']], $draft['extra_2']['items']);
+			$this->assertSame('full', $draft['extra_2']['layout']);
+			$this->assertSame('Tabela', Pages::label('extra_1', $draft['extra_1']));
+			$this->assertTrue(Pages::extraType('custom_steps'));
+			$this->assertArrayNotHasKey('items', Pages::blankCustom('custom'));
+
+			$tooMany = DocumentForm::design(['extra_1' => ['type' => 'custom_tiles', 'items' => array_fill(0, 7, ['title' => 'A', 'text' => ''])]], $this->current(), [...array_keys(Pages::TYPES), 'extra_1']);
+			$this->assertArrayHasKey('pages.extra_1.items', $tooMany['errors']);
+			$this->assertCount(6, $tooMany['draft']['pages']['extra_1']['items']);
 		}
 
 		public function test_design_rejects_invalid_extra_pages(): void

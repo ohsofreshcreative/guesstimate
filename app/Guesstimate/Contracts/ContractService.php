@@ -62,12 +62,16 @@ class ContractService
 		});
 	}
 
-	/** Zapis szkicu. W dzienniku skróty przed i po, więc każda zmiana szkicu zostawia ślad. */
-	public function saveDraft(Contract $contract, string $body): ContractVersion
+	/**
+	 * Zapis szkicu (edycja treści umowy przez człowieka). W dzienniku skróty przed i po, więc każda zmiana zostawia ślad.
+	 *
+	 * @param  ?string  $expected  skrót treści, którą widział użytkownik; inny skrót oznacza cudze zmiany
+	 */
+	public function saveDraft(Contract $contract, string $body, ?string $expected = null): ContractVersion
 	{
 		$this->allow($this->policy->canEdit($contract));
 
-		return DB::transaction(function () use ($contract, $body) {
+		return DB::transaction(function () use ($contract, $body, $expected) {
 			$version = $this->lockCurrent($contract);
 
 			if (! $version->status->isEditable()) {
@@ -75,6 +79,11 @@ class ContractService
 			}
 
 			$before = hash('sha256', (string) $version->body);
+
+			if ($expected !== null && ! hash_equals($before, $expected)) {
+				throw new DraftConflict();
+			}
+
 			$after = hash('sha256', $body);
 
 			if ($before !== $after) {

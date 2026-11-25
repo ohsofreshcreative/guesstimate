@@ -21,6 +21,12 @@ final class OfferContent
 		'a' => ['href' => true, 'title' => true, 'target' => true, 'rel' => true],
 	];
 
+	/** Nagłówki tylko w treści własnej strony dokumentu: H1/H2 stają się H3, a H6 staje się H5. */
+	public const HEADINGS = ['h3' => ['class' => true], 'h4' => ['class' => true], 'h5' => ['class' => true]];
+
+	/** Kolory tekstu własnej strony: paleta dokumentu (offer.css), zapisywana jako klasa `osf-c-<nazwa>`. */
+	public const COLORS = ['indigo', 'magenta', 'violet', 'flame', 'orange'];
+
 	public static function blank(): array
 	{
 		return [
@@ -112,20 +118,45 @@ final class OfferContent
 
 	/**
 	 * Czyści HTML z edytora: tylko dozwolone znaczniki, linki http(s)/mailto/tel, linki zewnętrzne z rel="noopener".
-	 * Puste akapity i div-y przeglądarki zamieniamy na akapity.
+	 * Puste akapity i div-y przeglądarki zamieniamy na akapity. Z `$headings` zostają nagłówki H3–H5.
 	 */
-	public static function clean(mixed $html): string
+	/**
+	 * Zostawia wyłącznie klasy kolorów z palety; span bez koloru znika (zostaje jego tekst).
+	 */
+	private static function colors(string $html): string
+	{
+		$html = (string) preg_replace_callback('#\sclass="([^"]*)"#i', function ($match) {
+			$keep = array_values(array_intersect(preg_split('/\s+/', trim($match[1])) ?: [], array_map(fn ($color) => 'osf-c-' . $color, self::COLORS)));
+
+			return $keep ? ' class="' . $keep[0] . '"' : '';
+		}, $html);
+
+		return (string) preg_replace('#<span>(.*?)</span>#is', '$1', $html);
+	}
+
+	public static function clean(mixed $html, bool $headings = false): string
 	{
 		$html = (string) $html;
 		$html = preg_replace('#<(/?)div\b[^>]*>#i', '<$1p>', $html);
-		$html = preg_replace('#<(/?)h[1-6]\b[^>]*>#i', '<$1p>', $html);
-		$html = wp_kses($html, self::ALLOWED, ['http', 'https', 'mailto', 'tel']);
+
+		if ($headings) {
+			$html = preg_replace(['#<(/?)h[12]\b[^>]*>#i', '#<(/?)h6\b[^>]*>#i'], ['<$1h3>', '<$1h5>'], $html);
+		} else {
+			$html = preg_replace('#<(/?)h[1-6]\b[^>]*>#i', '<$1p>', $html);
+		}
+
+		$allowed = $headings ? array_merge(self::ALLOWED, self::HEADINGS, ['span' => ['class' => true], 'p' => ['class' => true], 'li' => ['class' => true]]) : self::ALLOWED;
+		$html = wp_kses($html, $allowed, ['http', 'https', 'mailto', 'tel']);
+
+		if ($headings) {
+			$html = self::colors($html);
+		}
 		$html = preg_replace_callback('#<a\b([^>]*)>#i', function ($m) {
 			$attrs = preg_replace('#\s(target|rel)="[^"]*"#i', '', $m[1]);
 
 			return '<a' . $attrs . ' target="_blank" rel="noopener noreferrer">';
 		}, $html);
-		$html = preg_replace('#<p>(\s|&nbsp;|<br\s*/?>)*</p>#i', '', $html);
+		$html = preg_replace('#<(p|h[345])>(\s|&nbsp;|<br\s*/?>)*</\1>#i', '', $html);
 
 		return trim($html);
 	}

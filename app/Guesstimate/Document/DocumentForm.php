@@ -161,7 +161,7 @@ final class DocumentForm
 				continue;
 			}
 
-			$pages[$id] = ['type' => $row['type']] + Pages::blank($row['type']) + ($row['type'] === Pages::CUSTOM ? ['html' => ''] : []);
+			$pages[$id] = Pages::isCustom($row['type']) ? Pages::blankCustom($row['type']) : ['type' => $row['type']] + Pages::blank($row['type']);
 		}
 
 		foreach ($pages as $key => $page) {
@@ -251,8 +251,16 @@ final class DocumentForm
 				$page['heading'] = $heading === '' || $heading === (Pages::HEADINGS[$type] ?? null) ? null : $heading;
 			}
 
-			if (array_key_exists('html', $row) && $type === Pages::CUSTOM) {
-				$html = OfferContent::clean($row['html']);
+			if (array_key_exists('items', $row) && isset(Pages::CUSTOM_ITEMS[$type])) {
+				[$page['items'], $problem] = self::customItems($type, $row['items']);
+
+				if ($problem) {
+					$errors["pages.{$key}.items"] = sprintf('%s: %s', $label, $problem);
+				}
+			}
+
+			if (array_key_exists('html', $row) && Pages::isCustom($type)) {
+				$html = OfferContent::clean($row['html'], headings: true);
 
 				if (mb_strlen($html) > Pages::MAX_CUSTOM_HTML) {
 					$errors["pages.{$key}.html"] = sprintf('%s: treść jest za długa.', $label);
@@ -276,5 +284,43 @@ final class DocumentForm
 		$data = array_replace($current, ['pages' => $pages, 'page_order' => Pages::order($pages, $order ?? ($current['page_order'] ?? null))]);
 
 		return ['data' => $errors ? null : $data, 'draft' => $data, 'errors' => $errors];
+	}
+
+	/**
+	 * Pozycje własnej strony (tabela, kafelki, kroki): puste wiersze są pomijane, pola przycinane do limitów.
+	 *
+	 * @return array{0: list<array<string, string>>, 1: string|null}
+	 */
+	private static function customItems(string $type, mixed $input): array
+	{
+		$spec = Pages::CUSTOM_ITEMS[$type];
+		$items = [];
+		$problem = null;
+
+		foreach (array_values(is_array($input) ? $input : []) as $i => $row) {
+			$item = [];
+
+			foreach ($spec['fields'] as $field => $max) {
+				$value = is_array($row) && is_scalar($row[$field] ?? null) ? (string) $row[$field] : '';
+				$item[$field] = mb_substr((string) (($field === 'description' || $field === 'text' ? Input::text($value) : Input::line($value)) ?? ''), 0, $max);
+			}
+
+			if (! array_filter($item, fn ($value) => $value !== '')) {
+				continue;
+			}
+
+			if ($item[$spec['required']] === '') {
+				$problem ??= sprintf('pozycja %d nie ma nazwy.', $i + 1);
+			}
+
+			$items[] = $item;
+		}
+
+		if (count($items) > $spec['max']) {
+			$problem ??= sprintf('najwyżej %d pozycji.', $spec['max']);
+			$items = array_slice($items, 0, $spec['max']);
+		}
+
+		return [$items, $problem];
 	}
 }

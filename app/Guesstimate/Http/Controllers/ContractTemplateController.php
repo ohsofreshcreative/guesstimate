@@ -2,6 +2,7 @@
 
 namespace App\Guesstimate\Http\Controllers;
 
+use App\Guesstimate\Contracts\PageSetup;
 use App\Guesstimate\Contracts\ContractHtml;
 use App\Guesstimate\Contracts\ContractStatus;
 use App\Guesstimate\Contracts\ContractTemplate;
@@ -88,6 +89,7 @@ class ContractTemplateController extends Controller
 		$regions = array_map([ContractHtml::class, 'clean'], TemplateDocument::parse((string) $version->body));
 
 		return view('guesstimate.contract-templates.edit', [
+			'pageCss' => PageSetup::current()->css(),
 			'template' => $template,
 			'version' => $version,
 			'versions' => $versions,
@@ -101,7 +103,7 @@ class ContractTemplateController extends Controller
 				'hash' => hash('sha256', (string) $version->body),
 				'name' => $template->name,
 				'description' => (string) $template->description,
-				'background' => $template->background_id ? ['id' => $template->background_id, 'url' => Media::image($template->background_id, 'large')['url'] ?? null, 'thumb' => Media::thumb($template->background_id)] : null,
+				'background' => $template->background_id ? ['id' => $template->background_id, 'url' => Media::image($template->background_id, 'full')['url'] ?? null, 'thumb' => Media::thumb($template->background_id)] : null,
 				'labels' => TemplateVariables::all(),
 				'urls' => [
 					'save' => route('gst.contract-templates.save', $template),

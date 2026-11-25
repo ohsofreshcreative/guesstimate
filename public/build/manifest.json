@@ -45,7 +45,7 @@
     "src": "editor.deps.json"
   },
   "resources/css/app.css": {
-    "file": "assets/app-X8_04k_O.css",
+    "file": "assets/app-BDshcVzH.css",
     "name": "app",
     "names": [
       "app.css"
@@ -61,7 +61,7 @@
     ]
   },
   "resources/css/editor.css": {
-    "file": "assets/editor-DkboCgbq.css",
+    "file": "assets/editor-B-XR_JER.css",
     "name": "editor",
     "names": [
       "editor.css"
@@ -77,16 +77,22 @@
     ]
   },
   "resources/css/guesstimate.css": {
-    "file": "assets/guesstimate-DUMOzkAt.css",
+    "file": "assets/guesstimate-Xs9XoYyV.css",
     "name": "guesstimate",
     "names": [
       "guesstimate.css"
     ],
     "src": "resources/css/guesstimate.css",
-    "isEntry": true
+    "isEntry": true,
+    "assets": [
+      "assets/DejaVuSans-CHjR2eXl.ttf",
+      "assets/DejaVuSans-Bold-D3XZ3B4H.ttf",
+      "assets/DejaVuSans-Oblique-0Gknk7ff.ttf",
+      "assets/DejaVuSans-BoldOblique-DbcNr4hY.ttf"
+    ]
   },
   "resources/css/offer.css": {
-    "file": "assets/offer-CO1RGyN6.css",
+    "file": "assets/offer-s1ezgIl_.css",
     "name": "offer",
     "names": [
       "offer.css"
@@ -101,6 +107,22 @@
   "resources/fonts/PolySans Bulky Wide.ttf": {
     "file": "assets/PolySans Bulky Wide-VzLwgn3K.ttf",
     "src": "resources/fonts/PolySans Bulky Wide.ttf"
+  },
+  "resources/fonts/dejavu/DejaVuSans-Bold.ttf": {
+    "file": "assets/DejaVuSans-Bold-D3XZ3B4H.ttf",
+    "src": "resources/fonts/dejavu/DejaVuSans-Bold.ttf"
+  },
+  "resources/fonts/dejavu/DejaVuSans-BoldOblique.ttf": {
+    "file": "assets/DejaVuSans-BoldOblique-DbcNr4hY.ttf",
+    "src": "resources/fonts/dejavu/DejaVuSans-BoldOblique.ttf"
+  },
+  "resources/fonts/dejavu/DejaVuSans-Oblique.ttf": {
+    "file": "assets/DejaVuSans-Oblique-0Gknk7ff.ttf",
+    "src": "resources/fonts/dejavu/DejaVuSans-Oblique.ttf"
+  },
+  "resources/fonts/dejavu/DejaVuSans.ttf": {
+    "file": "assets/DejaVuSans-CHjR2eXl.ttf",
+    "src": "resources/fonts/dejavu/DejaVuSans.ttf"
   },
   "resources/fonts/sora/sora-latin-ext-wght-normal.woff2": {
     "file": "assets/sora-latin-ext-wght-normal-CawQDOvP.woff2",
@@ -288,7 +310,7 @@
     "isEntry": true
   },
   "resources/js/guesstimate.js": {
-    "file": "assets/guesstimate-CNFiKQwO.js",
+    "file": "assets/guesstimate-DtkuiNd9.js",
     "name": "guesstimate",
     "src": "resources/js/guesstimate.js",
     "isEntry": true,

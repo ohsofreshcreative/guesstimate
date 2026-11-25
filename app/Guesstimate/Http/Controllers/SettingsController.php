@@ -5,6 +5,7 @@ namespace App\Guesstimate\Http\Controllers;
 use App\Guesstimate\Ai\AiService;
 use App\Guesstimate\Clients\Nip;
 use App\Guesstimate\Contracts\ContractSnapshot;
+use App\Guesstimate\Contracts\PageSetup;
 use App\Guesstimate\Document\Background;
 use App\Guesstimate\Document\CaseStudy;
 use App\Guesstimate\Document\DocumentForm;
@@ -43,6 +44,7 @@ class SettingsController extends Controller
 		'ogolne' => 'Waluta, zaokrąglenia i numeracja',
 		'dokument' => 'Dokument oferty',
 		'wykonawca' => 'Dane wykonawcy',
+		'umowy' => 'Układ strony umów',
 		'tla' => 'Biblioteka teł',
 		'realizacje' => 'Realizacje',
 		'integracje' => 'Integracje',
@@ -91,13 +93,16 @@ class SettingsController extends Controller
 			'integracje' => $this->saveIntegrations($request),
 			'dokument' => $this->saveDocument($request),
 			'wykonawca' => $this->saveContractor($request),
+			'umowy' => $this->saveContractPage($request),
 		};
 
 		if ($errors) {
 			return $this->invalid('guesstimate.settings.index', $this->data($section), $errors);
 		}
 
-		return $this->redirectWith(route('gst.settings.index', ['section' => $section]), 'Zapisano ustawienia. Obowiązują dla nowych ofert — zapisane oferty się nie zmieniają.');
+		$message = $section === 'umowy' ? 'Zapisano układ strony umów.' : 'Zapisano ustawienia. Obowiązują dla nowych ofert — zapisane oferty się nie zmieniają.';
+
+		return $this->redirectWith(route('gst.settings.index', ['section' => $section]), $message);
 	}
 
 	public function storePageType(Request $request)
@@ -258,6 +263,26 @@ class SettingsController extends Controller
 
 		if (! $errors) {
 			$this->settings->set('contractor', $data);
+		}
+
+		return $errors;
+	}
+
+	private function saveContractPage(Request $request): array
+	{
+		['values' => $values, 'errors' => $errors] = PageSetup::validate((array) $request->input('page', []));
+		$errors = collect($errors)->mapWithKeys(fn ($message, $key) => ['page.' . $key => $message])->all();
+
+		if (! $errors && $values['left'] + $values['right'] > 120) {
+			$errors['page.right'] = 'Lewy i prawy margines razem mogą mieć najwyżej 120 mm.';
+		}
+
+		if (! $errors && $values['top'] + $values['bottom'] > 200) {
+			$errors['page.bottom'] = 'Górny i dolny margines razem mogą mieć najwyżej 200 mm.';
+		}
+
+		if (! $errors) {
+			$this->settings->set('contract_page', $values);
 		}
 
 		return $errors;

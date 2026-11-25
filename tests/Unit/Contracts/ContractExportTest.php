@@ -77,7 +77,7 @@ class ContractExportTest extends TestCase
 		$this->assertArrayHasKey('[Content_Types].xml', $parts);
 		$this->assertArrayHasKey('word/numbering.xml', $parts);
 
-		foreach ($parts as $name => $xml) {
+		foreach (array_filter($parts, fn ($name) => str_ends_with($name, '.xml') || str_ends_with($name, '.rels'), ARRAY_FILTER_USE_KEY) as $name => $xml) {
 			$this->assertTrue((new DOMDocument())->loadXML($xml, LIBXML_NONET), $name);
 		}
 	}
@@ -161,9 +161,132 @@ class ContractExportTest extends TestCase
 		$regions = $this->regions('<p>a</p><hr class="ct-break"><p>b</p>');
 		$html = PdfExporter::html($regions, 'T', 0, ['top' => 0.0, 'bottom' => 0.0], 'data:image/png;base64,AAAA');
 
-		$this->assertStringContainsString('.gst-bg{position:fixed;top:-20.0mm;left:-20mm;width:210mm;height:297mm}', $html);
+		$this->assertStringContainsString('.gst-bg{position:fixed;top:-20.0mm;left:-20.0mm;width:210mm;height:297mm;z-index:-1}', $html);
 		$this->assertLessThan(strpos($html, '<p>a</p>'), strpos($html, '<div class="gst-bg"><img src="data:image/png;base64,AAAA"'));
 		$this->assertStringNotContainsString('gst-bg', PdfExporter::html($regions, 'T'));
+	}
+
+	public function test_page_setup_validates_and_moves_body_below_tall_header(): void
+	{
+		$page = \App\Guesstimate\Contracts\PageSetup::from(['top' => 45, 'header' => 10, 'left' => 'x', 'bottom' => 500]);
+
+		$this->assertSame(45.0, $page->bodyTop(20.0), 'niski nagłówek: treść na marginesie');
+		$this->assertSame(40.0 + 10, $page->bodyTop(40.0), 'wysoki nagłówek: treść pod nim');
+		$this->assertSame(45.0, $page->bodyTop(0.0), 'bez nagłówka: margines');
+		$this->assertSame(20.0, $page->get('left'), 'błędna wartość wraca do domyślnej');
+		$this->assertSame(20.0, $page->get('bottom'), 'wartość ponad limit wraca do domyślnej');
+		$this->assertStringContainsString('--ct-top: 45mm;', $page->css());
+
+		$result = \App\Guesstimate\Contracts\PageSetup::validate(['top' => '12,5', 'bottom' => '-1', 'left' => '20', 'right' => '20', 'header' => '10', 'footer' => 'abc']);
+		$this->assertSame(12.5, $result['values']['top']);
+		$this->assertArrayHasKey('bottom', $result['errors']);
+		$this->assertArrayHasKey('footer', $result['errors']);
+	}
+
+	public function test_pdf_uses_page_setup(): void
+	{
+		$page = \App\Guesstimate\Contracts\PageSetup::from(['top' => 40, 'bottom' => 30, 'left' => 25, 'right' => 15, 'header' => 10, 'footer' => 12]);
+		$html = PdfExporter::html($this->regions('<p>a</p>', '<p>H</p>', '<p>F</p>'), 'T', 0, ['top' => 8.0, 'bottom' => 6.0], 'data:image/png;base64,AAAA', $page);
+
+		$this->assertStringContainsString('@page{size:A4 portrait;margin:40.0mm 15.0mm 30.0mm 25.0mm}', $html);
+		$this->assertStringContainsString('.gst-header{position:fixed;top:-30.0mm;', $html);
+		$this->assertStringContainsString('.gst-footer{position:fixed;bottom:-18.0mm;', $html);
+		$this->assertStringContainsString('.gst-bg{position:fixed;top:-40.0mm;left:-25.0mm;', $html);
+	}
+
+	public function test_docx_embeds_font_and_background(): void
+	{
+		$image = tempnam(sys_get_temp_dir(), 'gst-bg') . '.png';
+		$gd = imagecreatetruecolor(4, 6);
+		imagepng($gd, $image);
+		$parts = $this->unzip((new DocxExporter())->render($this->regions('<p>a</p>', '<p>Nagłówek</p>'), 'T', $image));
+		@unlink($image);
+
+		$this->assertArrayHasKey('word/media/background.png', $parts);
+		$this->assertStringContainsString('behindDoc="1"', $parts['word/header1.xml']);
+		$this->assertStringContainsString('<a:blip r:embed="rIdBg"/>', $parts['word/header1.xml']);
+		$this->assertStringContainsString('Nagłówek', $parts['word/header1.xml']);
+		$this->assertStringContainsString('media/background.png', $parts['word/_rels/header1.xml.rels']);
+
+		foreach (['word/header1.xml', 'word/fontTable.xml', 'word/settings.xml', '[Content_Types].xml', 'word/_rels/document.xml.rels'] as $part) {
+			$this->assertNotFalse(@simplexml_load_string($parts[$part]), $part . ' to poprawny XML');
+		}
+
+		// Osadzony krój: po odszyfrowaniu pierwszych 32 bajtów kluczem z GUID plik jest z powrotem TTF.
+		$this->assertMatchesRegularExpression('~<w:embedRegular r:id="rIdF1" w:fontKey="\{[0-9A-F-]{36}\}"/>~', $parts['word/fontTable.xml']);
+		preg_match('~w:fontKey="\{([0-9A-F-]{36})\}"~', $parts['word/fontTable.xml'], $match);
+		$key = strrev(hex2bin(str_replace('-', '', $match[1])));
+		$font = $parts['word/fonts/font1.odttf'];
+
+		for ($i = 0; $i < 32; $i++) {
+			$font[$i] = $font[$i] ^ $key[$i % 16];
+		}
+
+		$this->assertSame(file_get_contents(dirname(__DIR__, 3) . '/resources/fonts/dejavu/DejaVuSans.ttf'), $font);
+		$this->assertStringContainsString('w:ascii="DejaVu Sans"', $parts['word/styles.xml']);
+	}
+
+	public function test_breaks_from_panel_are_parsed_strictly(): void
+	{
+		$this->assertSame([[3, 0], [7, 2]], ContractExport::breaks('3, 7.2,x,-1,4.5.6,'));
+		$this->assertSame([], ContractExport::breaks(''));
+	}
+
+	public function test_panel_breaks_become_hard_page_breaks_without_changing_text(): void
+	{
+		$html = '<p>Zażółć</p><table><thead><tr><th>H</th></tr></thead><tbody><tr><td>1</td></tr><tr><td>2</td></tr><tr><td>3</td></tr></tbody></table><ol><li>a</li><li>b</li></ol><hr class="ct-break"><p>Po</p>';
+		$out = ContractExport::paginate($html, [[1, 2], [2, 1], [4, 0], [9, 0]]);
+
+		// Ten sam tekst; jedyny dodatek to powtórzony nagłówek tabeli na nowej stronie (jak w panelu).
+		$this->assertSame('ZażółćH12H3abPo', strip_tags($out));
+		$this->assertStringContainsString('<tr><td>2</td></tr></tbody></table><hr class="ct-break"><table><thead><tr><th>H</th></tr></thead><tbody><tr><td>3</td></tr></tbody></table>', $out);
+		$this->assertStringContainsString('<li>a</li></ol><hr class="ct-break"><ol start="2"><li>b</li></ol>', $out);
+		$this->assertSame(1, substr_count($out, '<hr class="ct-break"><p>Po</p>'), 'ręczny podział nie jest dublowany');
+		$this->assertSame(3, substr_count($out, 'ct-break'));
+		$this->assertSame($html, ContractExport::paginate($html, []));
+	}
+
+	public function test_pdf_line_height_matches_panel(): void
+	{
+		// Dompdf mnoży line-height przez wysokość kroju; po korekcie wiersz 10 pt ma 14 pt jak w przeglądarce.
+		preg_match('~body\{[^}]*line-height:([0-9.]+)~', PdfExporter::html($this->regions('<p>a</p>'), 'T'), $match);
+
+		$this->assertEqualsWithDelta(1.09, (float) $match[1], 0.02);
+	}
+
+	public function test_docx_spacing_does_not_double_and_lists_are_tight(): void
+	{
+		$parts = $this->docx($this->regions('<ul><li>a</li><li>b</li></ul>'));
+
+		$this->assertStringContainsString('<w:pStyle w:val="ListText"/>', $parts['word/document.xml']);
+		$this->assertStringContainsString('<w:contextualSpacing/>', $parts['word/styles.xml']);
+		$this->assertStringContainsString('w:styleId="ContractPar"><w:name w:val="Paragraf umowy"/><w:basedOn w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="85"', $parts['word/styles.xml']);
+	}
+
+	public function test_docx_drops_trailing_line_break_like_browser(): void
+	{
+		$xml = $this->docx($this->regions('<p><br></p><p>a<br>b<br></p><p><strong>c<br></strong></p>'))['word/document.xml'];
+
+		$this->assertStringContainsString('<w:p></w:p>', $xml, 'pusty akapit z <br> ma jeden wiersz');
+		$this->assertSame(1, substr_count($xml, '<w:br/>'), 'zostaje tylko łamanie w środku akapitu');
+	}
+
+	public function test_docx_page_break_starts_next_paragraph_without_empty_line(): void
+	{
+		$xml = $this->docx($this->regions('<p>a</p><hr class="ct-break"><p class="ct-par">P</p><hr class="ct-break"><p>b</p>'))['word/document.xml'];
+
+		$this->assertStringContainsString('<w:p><w:pPr><w:pStyle w:val="ContractPar"/><w:pageBreakBefore/></w:pPr>', $xml);
+		$this->assertStringContainsString('<w:p><w:pPr><w:pageBreakBefore/></w:pPr>', $xml);
+		$this->assertStringNotContainsString('<w:br w:type="page"/>', $xml, 'bez akapitu ze znakiem podziału');
+	}
+
+	public function test_docx_uses_panel_measures(): void
+	{
+		$parts = $this->docx($this->regions('<p>a</p>'));
+
+		$this->assertStringContainsString('<w:sz w:val="20"/>', $parts['word/styles.xml']);
+		$this->assertStringContainsString('w:line="280" w:lineRule="exact"', $parts['word/styles.xml']);
+		$this->assertStringContainsString('w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="1134"', $parts['word/document.xml']);
 	}
 
 	public function test_pdf_refuses_characters_the_font_would_lose(): void
@@ -222,6 +345,6 @@ class ContractExportTest extends TestCase
 
 		$this->assertSame(2, substr_count($xml, '<w:tbl>'));
 		$this->assertSame(2, substr_count($xml, '<w:tr>'));
-		$this->assertStringContainsString('</w:tbl><w:p><w:pPr><w:pStyle w:val="TableText"/></w:pPr></w:p></w:tc>', $xml);
+		$this->assertStringContainsString('</w:tbl><w:p><w:pPr><w:spacing w:after="0" w:line="142" w:lineRule="exact"/></w:pPr></w:p></w:tc>', $xml);
 	}
 }

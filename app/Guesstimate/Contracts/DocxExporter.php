@@ -25,31 +25,163 @@ final class DocxExporter
 
 	private const BULLETS = 1;
 
+	private const TWIPS_PER_MM = 1440 / 25.4;
+
 	private const JC = ['ct-center' => 'center', 'ct-right' => 'right', 'ct-justify' => 'both'];
 
 	/** @var list<int> pierwsze numery kolejnych list numerowanych; każda dostaje własne `w:num` */
 	private array $ordered = [];
 
-	public function render(array $regions, string $title): string
+	/**
+	 * @param  string|null  $background  plik graficzny tła stron (papier firmowy) albo null
+	 */
+	public function render(array $regions, string $title, ?string $background = null, ?PageSetup $page = null): string
 	{
+		$page ??= PageSetup::defaults();
 		$header = $this->part($regions['header']);
 		$footer = $this->part($regions['footer']);
 		$body = $this->part($regions['body']);
+		// Pole treści jak w panelu i PDF (ten sam krój, więc te same wysokości): margines albo nagłówek/stopka + odstęp.
+		$space = PdfExporter::measure($regions, $page);
+		$twips = fn (float $mm) => (int) round($mm * self::TWIPS_PER_MM);
 		$section = '<w:sectPr><w:headerReference w:type="default" r:id="rId3"/><w:footerReference w:type="default" r:id="rId4"/>'
-			. '<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr>';
+			. sprintf(
+				'<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="%d" w:right="%d" w:bottom="%d" w:left="%d" w:header="%d" w:footer="%d" w:gutter="0"/></w:sectPr>',
+				$twips($page->bodyTop($space['top'])),
+				$twips($page->get('right')),
+				$twips($page->bodyBottom($space['bottom'])),
+				$twips($page->get('left')),
+				$twips($page->get('header')),
+				$twips($page->get('footer')),
+			);
+		$image = $background ? self::image($background) : null;
+		// Tło: obraz na całą kartkę zakotwiczony w nagłówku, za tekstem — Word powtarza go na każdej stronie.
+		// Trafia do pierwszego akapitu nagłówka, a gdy go nie ma — do akapitu o zerowej wysokości.
+		if ($image) {
+			$header = (string) preg_replace('~^<w:p>(<w:pPr>.*?</w:pPr>)?~s', '<w:p>$1' . self::backgroundRun(), $header, 1, $count);
+
+			if (! $count) {
+				$header = '<w:p><w:pPr><w:spacing w:after="0" w:line="20" w:lineRule="exact"/></w:pPr>' . self::backgroundRun() . '</w:p>' . $header;
+			}
+		}
+
+		$header = $header ?: '<w:p/>';
+
 		$parts = [
 			'[Content_Types].xml' => self::contentTypes(),
 			'_rels/.rels' => self::rels(),
 			'docProps/core.xml' => self::core($title),
 			'word/document.xml' => self::XML . '<w:document ' . self::NS . '><w:body>' . $body . $section . '</w:body></w:document>',
-			'word/header1.xml' => self::XML . '<w:hdr ' . self::NS . '>' . ($header ?: '<w:p/>') . '</w:hdr>',
+			'word/header1.xml' => self::XML . '<w:hdr ' . self::NS . ' ' . self::DRAWING_NS . '>' . $header . '</w:hdr>',
 			'word/footer1.xml' => self::XML . '<w:ftr ' . self::NS . '>' . ($footer ?: '<w:p/>') . '</w:ftr>',
 			'word/styles.xml' => self::styles(),
+			'word/settings.xml' => self::XML . '<w:settings ' . self::NS . '><w:embedTrueTypeFonts/></w:settings>',
 			'word/numbering.xml' => $this->numbering(),
 			'word/_rels/document.xml.rels' => self::documentRels(),
 		];
 
-		return self::zip($parts);
+		if ($image) {
+			$parts['word/media/background.' . $image['ext']] = $image['bytes'];
+			$parts['word/_rels/header1.xml.rels'] = self::XML . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+				. '<Relationship Id="rIdBg" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/background.' . $image['ext'] . '"/></Relationships>';
+		}
+
+		return self::zip($parts + self::fonts());
+	}
+
+	private const DRAWING_NS = 'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
+
+	/** A4 w EMU (1 mm = 36 000 EMU). */
+	private const PAGE_EMU = [7560000, 10692000];
+
+	/** Krój panelu i PDF. Word go zwykle nie ma, więc plik niesie go w sobie (osadzone fonty, ECMA-376 §17.8.1). */
+	private const FONT = 'DejaVu Sans';
+
+	private const FONT_FILES = [
+		'embedRegular' => 'DejaVuSans.ttf',
+		'embedBold' => 'DejaVuSans-Bold.ttf',
+		'embedItalic' => 'DejaVuSans-Oblique.ttf',
+		'embedBoldItalic' => 'DejaVuSans-BoldOblique.ttf',
+	];
+
+	private static function backgroundRun(): string
+	{
+		[$cx, $cy] = self::PAGE_EMU;
+
+		return '<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="1" locked="1" layoutInCell="1" allowOverlap="1">'
+			. '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV>'
+			. "<wp:extent cx=\"{$cx}\" cy=\"{$cy}\"/><wp:effectExtent l=\"0\" t=\"0\" r=\"0\" b=\"0\"/><wp:wrapNone/><wp:docPr id=\"1\" name=\"Tło strony\"/><wp:cNvGraphicFramePr/>"
+			. '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="background"/><pic:cNvPicPr/></pic:nvPicPr>'
+			. '<pic:blipFill><a:blip r:embed="rIdBg"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+			. "<pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{$cx}\" cy=\"{$cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr>"
+			. '</pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
+	}
+
+	/**
+	 * Obraz tła w formacie, który zna Word: JPG i PNG bez zmian, WebP przez GD do PNG.
+	 *
+	 * @return array{ext: string, bytes: string}|null
+	 */
+	private static function image(string $file): ?array
+	{
+		if (! is_readable($file)) {
+			return null;
+		}
+
+		$type = function_exists('wp_check_filetype') ? (wp_check_filetype($file)['type'] ?? null) : (mime_content_type($file) ?: null);
+
+		if ($type === 'image/jpeg' || $type === 'image/png') {
+			return ['ext' => $type === 'image/png' ? 'png' : 'jpeg', 'bytes' => (string) file_get_contents($file)];
+		}
+
+		if ($type === 'image/webp' && function_exists('imagecreatefromwebp') && ($gd = @imagecreatefromwebp($file))) {
+			ob_start();
+			imagepng($gd);
+
+			return ['ext' => 'png', 'bytes' => (string) ob_get_clean()];
+		}
+
+		return null;
+	}
+
+	/**
+	 * Osadzone fonty: plik `.odttf` to TTF z pierwszymi 32 bajtami zaszyfrowanymi XOR kluczem z GUID (odwrócone bajty).
+	 *
+	 * @return array<string, string>
+	 */
+	private static function fonts(): array
+	{
+		$dir = dirname(__DIR__, 3) . '/resources/fonts/dejavu/';
+		$parts = [];
+		$embeds = '';
+		$rels = '';
+		$n = 0;
+
+		foreach (self::FONT_FILES as $element => $file) {
+			if (! is_readable($dir . $file)) {
+				continue;
+			}
+
+			$n++;
+			$hex = strtoupper(md5('gst-font-' . $file));
+			$guid = sprintf('{%s-%s-%s-%s-%s}', substr($hex, 0, 8), substr($hex, 8, 4), substr($hex, 12, 4), substr($hex, 16, 4), substr($hex, 20, 12));
+			$key = strrev((string) hex2bin($hex));
+			$bytes = (string) file_get_contents($dir . $file);
+
+			for ($i = 0; $i < 32; $i++) {
+				$bytes[$i] = $bytes[$i] ^ $key[$i % 16];
+			}
+
+			$parts["word/fonts/font{$n}.odttf"] = $bytes;
+			$embeds .= "<w:{$element} r:id=\"rIdF{$n}\" w:fontKey=\"{$guid}\"/>";
+			$rels .= "<Relationship Id=\"rIdF{$n}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/font\" Target=\"fonts/font{$n}.odttf\"/>";
+		}
+
+		$parts['word/fontTable.xml'] = self::XML . '<w:fonts ' . self::NS . '><w:font w:name="' . self::FONT . '"><w:family w:val="swiss"/><w:pitch w:val="variable"/>' . $embeds . '</w:font>'
+			. '<w:font w:name="Arial"><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font></w:fonts>';
+		$parts['word/_rels/fontTable.xml.rels'] = self::XML . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . $rels . '</Relationships>';
+
+		return $parts;
 	}
 
 	private function part(string $html): string
@@ -64,7 +196,26 @@ final class DocxExporter
 		libxml_clear_errors();
 		libxml_use_internal_errors($previous);
 
-		return $this->blocks($document->getElementsByTagName('body')->item(0));
+		return self::breaksBefore($this->blocks($document->getElementsByTagName('body')->item(0)));
+	}
+
+	private const PAGE_BREAK = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+
+	/**
+	 * Podział strony jako właściwość „od nowej strony” akapitu, który ją zaczyna, a nie osobny akapit ze znakiem
+	 * podziału: taki akapit zostawiał pusty wiersz na górze każdej strony, a gdy Word przełamał stronę sam chwilę
+	 * wcześniej — całą pustą stronę. Przed tabelą (bez akapitu) zostaje znak podziału w akapicie o zerowej wysokości.
+	 */
+	private static function breaksBefore(string $xml): string
+	{
+		$xml = (string) preg_replace_callback('~' . preg_quote(self::PAGE_BREAK, '~') . '<w:p>(?:<w:pPr>(.*?)</w:pPr>)?~s', function ($match) {
+			// Kolejność w w:pPr wynika ze schematu: pStyle, keepNext, keepLines, pageBreakBefore…
+			$properties = (string) preg_replace('~^((?:<w:pStyle [^>]*/>)?(?:<w:keepNext/>)?(?:<w:keepLines/>)?)~', '$1<w:pageBreakBefore/>', $match[1] ?? '', 1);
+
+			return '<w:p><w:pPr>' . $properties . '</w:pPr>';
+		}, $xml);
+
+		return str_replace(self::PAGE_BREAK, '<w:p><w:pPr><w:spacing w:after="0" w:line="20" w:lineRule="exact"/></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>', $xml);
 	}
 
 	private function blocks(DOMNode $parent, array $cell = []): string
@@ -91,7 +242,7 @@ final class DocxExporter
 			$xml .= match ($tag) {
 				'ul', 'ol' => $this->listing($node, 0),
 				'table' => $this->table($node),
-				'hr' => '<w:p><w:r><w:br w:type="page"/></w:r></w:p>',
+				'hr' => self::PAGE_BREAK,
 				default => $this->block($node, $cell),
 			};
 		}
@@ -118,6 +269,10 @@ final class DocxExporter
 
 	private static function paragraph(string $runs, ?string $style, ?string $jc, string $numbering = ''): string
 	{
+		// Przeglądarka pomija łamanie wiersza na końcu akapitu (pusty akapit z <br> to jeden wiersz), a Word dodaje
+		// po nim kolejną linię. Bez tego każdy pusty akapit z edytora był w Wordzie dwa razy wyższy i strony się przelewały.
+		$runs = (string) preg_replace('~(?:<w:r>(?:<w:rPr>(?:(?!</w:rPr>).)*</w:rPr>)?(?:<w:br/>|<w:t xml:space="preserve">\s*</w:t>)</w:r>)+$~s', '', $runs);
+
 		$properties = ($style ? "<w:pStyle w:val=\"{$style}\"/>" : '') . $numbering . ($jc ? "<w:jc w:val=\"{$jc}\"/>" : '');
 
 		return '<w:p>' . ($properties ? "<w:pPr>{$properties}</w:pPr>" : '') . $runs . '</w:p>';
@@ -183,7 +338,7 @@ final class DocxExporter
 				$tag = $node instanceof DOMElement ? strtolower($node->tagName) : '';
 
 				if (in_array($tag, ['ul', 'ol', 'p'], true) && self::hasText($inline)) {
-					$xml .= self::paragraph($this->runs($inline, []), null, null, $first);
+					$xml .= self::paragraph($this->runs($inline, []), 'ListText', null, $first);
 					$first = '';
 				}
 
@@ -202,7 +357,7 @@ final class DocxExporter
 			}
 
 			if (self::hasText($inline)) {
-				$xml .= self::paragraph($this->runs($inline, []), null, null, $first);
+				$xml .= self::paragraph($this->runs($inline, []), 'ListText', null, $first);
 			}
 		}
 
@@ -231,7 +386,7 @@ final class DocxExporter
 
 		$width = (int) floor(self::WIDTH / $columns);
 		$border = fn ($side) => "<w:{$side} w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"888888\"/>";
-		$xml = '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblBorders>' . implode('', array_map($border, ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'])) . '</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>'
+		$xml = '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblBorders>' . implode('', array_map($border, ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'])) . '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="85" w:type="dxa"/><w:left w:w="113" w:type="dxa"/><w:bottom w:w="85" w:type="dxa"/><w:right w:w="113" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>'
 			. str_repeat("<w:gridCol w:w=\"{$width}\"/>", $columns) . '</w:tblGrid>';
 
 		$merged = [];
@@ -252,7 +407,8 @@ final class DocxExporter
 		}
 
 		// Dwie tabele bez akapitu między nimi Word skleja w jedną.
-		return $xml . '</w:tbl><w:p><w:pPr><w:pStyle w:val="TableText"/></w:pPr></w:p>';
+		// Akapit po tabeli (Word go wymaga) ma wysokość odstępu pod tabelą w panelu: 2,5 mm.
+		return $xml . '</w:tbl><w:p><w:pPr><w:spacing w:after="0" w:line="142" w:lineRule="exact"/></w:pPr></w:p>';
 	}
 
 	/**
@@ -333,15 +489,20 @@ final class DocxExporter
 	{
 		$style = fn (string $id, string $name, string $paragraph, string $run = '') => sprintf('<w:style w:type="paragraph" w:styleId="%1$s"><w:name w:val="%2$s"/><w:basedOn w:val="Normal"/><w:pPr>%3$s</w:pPr><w:rPr>%4$s</w:rPr></w:style>', $id, $name, $paragraph, $run);
 
-		return self::XML . '<w:styles ' . self::NS . '><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="21"/><w:szCs w:val="21"/><w:lang w:val="pl-PL"/></w:rPr></w:rPrDefault>'
-			. '<w:pPrDefault><w:pPr><w:spacing w:after="140" w:line="288" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
+		// Miary i krój jak w panelu i PDF (DejaVu Sans osadzony w pliku, 10 pt, interlinia 1,4 = stałe 14 pt, odstępy w mm),
+		// więc wiersze łamią się tak samo, a twarde łamania z panelu wyznaczają podział stron.
+		return self::XML . '<w:styles ' . self::NS . '><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="DejaVu Sans" w:hAnsi="DejaVu Sans" w:eastAsia="DejaVu Sans" w:cs="DejaVu Sans"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="pl-PL"/></w:rPr></w:rPrDefault>'
+			. '<w:pPrDefault><w:pPr><w:spacing w:after="142" w:line="280" w:lineRule="exact"/></w:pPr></w:pPrDefault></w:docDefaults>'
 			. '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>'
-			. $style('Heading1', 'heading 1', '<w:keepNext/><w:spacing w:before="220" w:after="170"/>', '<w:b/><w:sz w:val="32"/><w:szCs w:val="32"/>')
-			. $style('Heading2', 'heading 2', '<w:keepNext/><w:spacing w:before="220" w:after="140"/>', '<w:b/><w:sz w:val="26"/><w:szCs w:val="26"/>')
-			. $style('Heading3', 'heading 3', '<w:keepNext/><w:spacing w:before="170" w:after="110"/>', '<w:b/><w:sz w:val="22"/><w:szCs w:val="22"/>')
-			. $style('ContractPar', 'Paragraf umowy', '<w:keepNext/><w:spacing w:before="220" w:after="140"/><w:jc w:val="center"/>', '<w:b/>')
-			. $style('Small', 'Drobny druk', '', '<w:sz w:val="17"/><w:szCs w:val="17"/>')
-			. $style('TableText', 'Tekst tabeli', '<w:spacing w:after="0"/>', '<w:sz w:val="18"/><w:szCs w:val="18"/>')
+			// Word dodaje „po” poprzedniego akapitu do „przed” kolejnego, a przeglądarka bierze większy z marginesów.
+			// Dlatego „przed” to różnica do odstępu akapitu (2,5 mm = 142): 4 mm → 85, 3 mm → 28.
+			. $style('Heading1', 'heading 1', '<w:keepNext/><w:spacing w:before="85" w:after="170" w:line="420" w:lineRule="exact"/>', '<w:b/><w:sz w:val="30"/><w:szCs w:val="30"/>')
+			. $style('Heading2', 'heading 2', '<w:keepNext/><w:spacing w:before="85" w:after="142" w:line="336" w:lineRule="exact"/>', '<w:b/><w:sz w:val="24"/><w:szCs w:val="24"/>')
+			. $style('Heading3', 'heading 3', '<w:keepNext/><w:spacing w:before="28" w:after="113"/>', '<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/>')
+			. $style('ContractPar', 'Paragraf umowy', '<w:keepNext/><w:spacing w:before="85" w:after="142"/><w:jc w:val="center"/>', '<w:b/>')
+			. $style('ListText', 'Punkt listy', '<w:contextualSpacing/>')
+			. $style('Small', 'Drobny druk', '<w:spacing w:line="224" w:lineRule="exact"/>', '<w:sz w:val="16"/><w:szCs w:val="16"/>')
+			. $style('TableText', 'Tekst tabeli', '<w:spacing w:after="0" w:line="238" w:lineRule="exact"/>', '<w:sz w:val="17"/><w:szCs w:val="17"/>')
 			. '</w:styles>';
 	}
 
@@ -351,6 +512,9 @@ final class DocxExporter
 		$override = fn ($part, $type) => "<Override PartName=\"/{$part}\" ContentType=\"{$type}\"/>";
 
 		return self::XML . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+			. '<Default Extension="odttf" ContentType="application/vnd.openxmlformats-officedocument.obfuscatedFont"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/>'
+			. $override('word/settings.xml', "{$main}.settings+xml")
+			. $override('word/fontTable.xml', "{$main}.fontTable+xml")
 			. $override('word/document.xml', "{$main}.document.main+xml")
 			. $override('word/styles.xml', "{$main}.styles+xml")
 			. $override('word/numbering.xml', "{$main}.numbering+xml")
@@ -377,6 +541,8 @@ final class DocxExporter
 			. "<Relationship Id=\"rId2\" Type=\"{$type}/numbering\" Target=\"numbering.xml\"/>"
 			. "<Relationship Id=\"rId3\" Type=\"{$type}/header\" Target=\"header1.xml\"/>"
 			. "<Relationship Id=\"rId4\" Type=\"{$type}/footer\" Target=\"footer1.xml\"/>"
+			. "<Relationship Id=\"rId5\" Type=\"{$type}/settings\" Target=\"settings.xml\"/>"
+			. "<Relationship Id=\"rId6\" Type=\"{$type}/fontTable\" Target=\"fontTable.xml\"/>"
 			. '</Relationships>';
 	}
 

@@ -24,6 +24,24 @@ final class Pages
 	 */
 	public const CUSTOM = 'custom';
 	public const CUSTOM_LABEL = 'Własna strona';
+
+	/**
+	 * Szablony własnych stron. Każda ma nagłówek, wstęp (WYSIWYG) i — poza tekstem — własne pozycje w `items`,
+	 * niezależne od danych oferty.
+	 */
+	public const CUSTOM_TYPES = [
+		self::CUSTOM => 'Tekst',
+		'custom_table' => 'Tabela',
+		'custom_tiles' => 'Kafelki',
+		'custom_steps' => 'Lista kroków',
+	];
+
+	/** Pola i limity pozycji własnych stron (nazwa pola => maks. długość). */
+	public const CUSTOM_ITEMS = [
+		'custom_table' => ['max' => 12, 'fields' => ['name' => 120, 'description' => 600, 'price' => 120], 'required' => 'name'],
+		'custom_tiles' => ['max' => 6, 'fields' => ['title' => 120, 'text' => 600], 'required' => 'title'],
+		'custom_steps' => ['max' => 8, 'fields' => ['title' => 140, 'note' => 140], 'required' => 'title'],
+	];
 	public const MAX_EXTRA = 12;
 	public const MAX_CUSTOM_HTML = 20000;
 	private const EXTRA_ID = '/^extra_[1-9][0-9]{0,2}$/';
@@ -52,6 +70,9 @@ final class Pages
 		'next_steps' => ['text_image', 'image_text', 'full'],
 		'contact' => ['text_image', 'image_text'],
 		self::CUSTOM => ['full', 'text_image', 'image_text'],
+		'custom_table' => ['full'],
+		'custom_tiles' => ['tiles', 'full'],
+		'custom_steps' => ['text_image', 'image_text', 'full'],
 	];
 
 	/** Układy ze zdjęciem strony obok treści. */
@@ -109,7 +130,19 @@ final class Pages
 	/** Typ, który może mieć strona dodatkowa. */
 	public static function extraType(mixed $type): bool
 	{
-		return $type === self::CUSTOM || (is_string($type) && isset(self::TYPES[$type]) && ! in_array($type, self::NO_COPY, true));
+		return self::isCustom($type) || (is_string($type) && isset(self::TYPES[$type]) && ! in_array($type, self::NO_COPY, true));
+	}
+
+	/** Własna strona (dowolny szablon): treść należy do strony, a nie do danych oferty. */
+	public static function isCustom(mixed $type): bool
+	{
+		return is_string($type) && isset(self::CUSTOM_TYPES[$type]);
+	}
+
+	/** Pusta własna strona danego szablonu. */
+	public static function blankCustom(string $type): array
+	{
+		return ['type' => $type] + self::blank($type) + ['html' => ''] + (isset(self::CUSTOM_ITEMS[$type]) ? ['items' => []] : []);
 	}
 
 	/** Typ strony: klucz strony gotowej albo typ zapisany w stronie dodatkowej. */
@@ -126,10 +159,10 @@ final class Pages
 
 		$type = self::type($id, $page);
 
-		if ($type === self::CUSTOM) {
+		if (self::isCustom($type)) {
 			$heading = trim(str_replace('**', '', (string) ($page['heading'] ?? '')));
 
-			return $heading !== '' ? mb_substr($heading, 0, 60) : self::CUSTOM_LABEL;
+			return $heading !== '' ? mb_substr($heading, 0, 60) : ($type === self::CUSTOM ? self::CUSTOM_LABEL : self::CUSTOM_TYPES[$type]);
 		}
 
 		return (self::TYPES[$type] ?? self::CUSTOM_LABEL) . ' (kopia)';

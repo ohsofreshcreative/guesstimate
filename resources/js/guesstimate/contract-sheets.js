@@ -70,7 +70,10 @@ export function renderSheets(host, regions) {
     element.querySelectorAll('[data-var="page.count"]').forEach((el) => { el.textContent = parts.length; });
   });
 
-  return { pages: parts.length, overflow: overflow.length };
+  // Początki stron 2, 3…: eksport wstawia w tych miejscach twarde łamanie, żeby PDF i DOCX miały strony jak panel.
+  const starts = pages.slice(1).map((page) => page[0]).filter(Boolean).map((part) => (part.from ? `${part.index}.${part.from}` : `${part.index}`));
+
+  return { pages: parts.length, overflow: overflow.length, starts: starts.join(',') };
 }
 
 /** Początki stron 2, 3… (bez renderowania kartek): fragmenty `{ index, from? }` treści, od których zaczyna się strona. */

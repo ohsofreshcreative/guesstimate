@@ -112,7 +112,7 @@ export default (config) => ({
     const def = this.types[type];
     const extra = !!state.type;
     let label = def.label;
-    if (extra) label = type === 'custom' ? (String(state.heading || '').replaceAll('**', '').trim().slice(0, 60) || def.label) : `${def.label} (kopia)`;
+    if (extra) label = def.custom ? (String(state.heading || '').replaceAll('**', '').trim().slice(0, 60) || def.label) : `${def.label} (kopia)`;
     return { ...def, key: id, type, extra, label, optional: def.optional || extra };
   },
 
@@ -579,10 +579,27 @@ export default (config) => ({
     this.select(id);
   },
 
-  addCustomPage() {
+  /** Własna strona z wybranego szablonu: tekst, tabela, kafelki albo kroki (pozycje należą do tej strony). */
+  addCustomPage(type = 'custom') {
+    const def = this.types[type];
+    if (!def?.custom) return;
     this.insertPage({
-      type: 'custom', enabled: true, background_id: null, fit: null, layout: 'full', image_id: null, image_crop: null, fields: null, polish: null, heading: '', html: '',
+      type, enabled: true, background_id: null, fit: null, layout: def.layouts[0].key, image_id: null, image_crop: null, fields: null, polish: null, heading: '', html: '',
+      ...(def.items ? { items: [] } : {}),
     }, this.selected);
+  },
+
+  addItem() {
+    const spec = this.page?.items;
+    if (!spec || this.pageState.items.length >= spec.max) return;
+    this.pageState.items.push(Object.fromEntries(Object.keys(spec.fields).map((field) => [field, ''])));
+  },
+
+  moveItem(index, delta) {
+    const items = this.pageState.items;
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return;
+    items.splice(target, 0, items.splice(index, 1)[0]);
   },
 
   /** Kopia: wygląd i ustawienia strony; treść gotowej strony pochodzi z tych samych danych oferty. */

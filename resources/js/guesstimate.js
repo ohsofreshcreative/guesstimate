@@ -31,12 +31,19 @@ Alpine.data('contractEditor', contractEditor);
 Alpine.data('contractPreview', () => ({
   pageCount: 0,
   overflow: 0,
+  starts: '',
   init() {
     const { header, footer, body } = this.$refs;
-    const result = renderSheets(this.$refs.sheets, { header: header.innerHTML, footer: footer.innerHTML, nodes: [...body.children] });
-    this.pageCount = result.pages;
-    this.overflow = result.overflow;
+    // Podział liczymy po wczytaniu kroju dokumentu: inny font dałby inne strony niż w eksporcie.
+    document.fonts.ready.then(() => {
+      const result = renderSheets(this.$refs.sheets, { header: header.innerHTML, footer: footer.innerHTML, nodes: [...body.children] });
+      this.pageCount = result.pages;
+      this.overflow = result.overflow;
+      this.starts = result.starts;
+    });
   },
+  /** Link pobierania z podziałem stron z panelu. */
+  exportUrl(url) { return this.starts ? `${url}&strony=${this.starts}` : url; },
 }));
 Alpine.data('clickupIntegration', clickupIntegration);
 Alpine.data('mediaLibrary', mediaLibrary);

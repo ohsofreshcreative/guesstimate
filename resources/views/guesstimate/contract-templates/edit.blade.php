@@ -15,7 +15,7 @@
 @section('title', $template->name . ' – szablon umowy')
 
 @section('content')
-<div class="flex h-full flex-col" x-data="contractEditor(@js($config))"
+<div class="flex h-full flex-col" style="{{ $pageCss }}" x-data="contractEditor(@js($config))"
   x-on:beforeunload.window="if (dirty) { $event.preventDefault(); $event.returnValue = '' }">
   <header class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface px-4 py-2">
     <div class="flex min-w-0 items-center gap-3">
@@ -35,80 +35,10 @@
 
   <p class="bg-danger-soft px-4 py-2 text-sm text-danger" role="alert" x-show="error" x-text="error" x-cloak></p>
 
-  @if ($editable)
-    <div class="flex flex-wrap items-center gap-1 border-b border-line bg-surface px-4 py-1.5" x-show="mode === 'edit'" role="toolbar" aria-label="Formatowanie">
-      <select class="{{ $select }}" aria-label="Styl akapitu" x-on:change="setStyle($event.target.value); $event.target.value = ''">
-        <option value="">Styl…</option>
-        <option value="p">Akapit</option>
-        <option value="h1">Nagłówek 1</option>
-        <option value="h2">Nagłówek 2</option>
-        <option value="h3">Nagłówek 3</option>
-        <option value="par">Paragraf § (numerowany)</option>
-        <option value="small">Drobny druk</option>
-      </select>
-      <button type="button" class="{{ $tool }}" title="Pogrubienie" x-on:mousedown.prevent x-on:click="cmd('bold')"><strong>B</strong></button>
-      <button type="button" class="{{ $tool }}" title="Kursywa" x-on:mousedown.prevent x-on:click="cmd('italic')"><em>I</em></button>
-      <button type="button" class="{{ $tool }}" title="Podkreślenie" x-on:mousedown.prevent x-on:click="cmd('underline')"><u>U</u></button>
-      <span class="mx-1 h-5 border-l border-line"></span>
-      <button type="button" class="{{ $tool }}" x-on:mousedown.prevent x-on:click="cmd('insertUnorderedList')">Lista</button>
-      <button type="button" class="{{ $tool }}" x-on:mousedown.prevent x-on:click="cmd('insertOrderedList')">Numeracja</button>
-      <span class="mx-1 h-5 border-l border-line"></span>
-      <button type="button" class="{{ $tool }}" x-on:mousedown.prevent x-on:click="align()">Do lewej</button>
-      <button type="button" class="{{ $tool }}" x-on:mousedown.prevent x-on:click="align('ct-center')">Środek</button>
-      <button type="button" class="{{ $tool }}" x-on:mousedown.prevent x-on:click="align('ct-right')">Do prawej</button>
-      <button type="button" class="{{ $tool }}" x-on:mousedown.prevent x-on:click="align('ct-justify')">Wyjustuj</button>
-      <span class="mx-1 h-5 border-l border-line"></span>
-      <button type="button" class="{{ $tool }}" x-on:mousedown.prevent x-on:click="insertTable()">Tabela</button>
-      <select class="{{ $select }}" aria-label="Działanie na tabeli" x-on:change="tableAction($event.target.value); $event.target.value = ''">
-        <option value="">Tabela…</option>
-        <option value="row">Dodaj wiersz</option>
-        <option value="column">Dodaj kolumnę</option>
-        <option value="deleteRow">Usuń wiersz</option>
-        <option value="deleteColumn">Usuń kolumnę</option>
-        <option value="deleteTable">Usuń tabelę</option>
-      </select>
-      <button type="button" class="{{ $tool }}" x-on:mousedown.prevent x-on:click="insertBreak()">Podział strony</button>
-      <select class="{{ $select }}" aria-label="Wstaw zmienną" x-on:change="insertVariable($event.target.value); $event.target.value = ''">
-        <option value="">Zmienna…</option>
-        @foreach ($variables as $group => $items)
-          <optgroup label="{{ $group }}">
-            @foreach ($items as $key => $name)
-              <option value="{{ $key }}">{{ $name }}</option>
-            @endforeach
-          </optgroup>
-        @endforeach
-      </select>
-      <span class="mx-1 h-5 border-l border-line"></span>
-      <button type="button" class="{{ $tool }}" title="Cofnij (Ctrl+Z)" x-on:mousedown.prevent x-on:click="undo()" x-bind:disabled="past.length < 2">Cofnij</button>
-      <button type="button" class="{{ $tool }}" title="Ponów (Ctrl+Shift+Z)" x-on:mousedown.prevent x-on:click="redo()" x-bind:disabled="!future.length">Ponów</button>
-    </div>
-  @endif
+  @include('guesstimate.contract-templates.partials.toolbar')
 
   <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
-    <main class="min-w-0 flex-1 overflow-auto bg-canvas p-6">
-      <div class="mx-auto w-fit" x-show="mode === 'edit'">
-        <p class="mb-3 text-center text-sm text-ink-soft">Linie pokazują koniec strony A4 (ok. <span x-text="pageCount"></span> str.). Podział jest przybliżony, jak w podglądzie.</p>
-        <div x-ref="paper" class="ct-paper ct-doc relative" :style="background ? `--ct-bg: url('${background.url}')` : ''" x-on:keydown="keydown($event)" x-on:input.debounce.400ms="record()" x-on:paste="paste($event)">
-          <div x-ref="header" class="ct-region ct-region-side" data-placeholder="Nagłówek każdej strony" aria-label="Nagłówek dokumentu" @if ($editable) contenteditable="true" @endif>{!! $regions['header'] !!}</div>
-          <div x-ref="body" class="ct-region ct-doc-body my-4" aria-label="Treść dokumentu" @if ($editable) contenteditable="true" @endif>{!! $regions['body'] !!}</div>
-          <div x-ref="footer" class="ct-region ct-region-side" data-placeholder="Stopka każdej strony" aria-label="Stopka dokumentu" @if ($editable) contenteditable="true" @endif>{!! $regions['footer'] !!}</div>
-          {{-- Znaczniki końca strony: poza częściami dokumentu, więc nie trafiają do zapisu. --}}
-          <template x-for="mark in breaks" :key="mark.page">
-            <div class="pointer-events-none absolute inset-x-0 border-t-2 border-dashed border-accent/50" :style="`top: ${mark.top}px`" aria-hidden="true" data-page-break>
-              <span class="absolute -top-3 right-2 rounded-full bg-accent-soft px-2 text-xs font-medium text-accent-strong" x-text="`Strona ${mark.page}`"></span>
-            </div>
-          </template>
-        </div>
-        <div x-ref="measure" class="pointer-events-none invisible fixed left-0 top-0" aria-hidden="true"></div>
-      </div>
-      <div x-show="mode === 'preview'" x-cloak>
-        <p class="mb-3 text-center text-sm text-ink-soft">
-          <span x-text="pageCount"></span> str. Układ jest przybliżony: podział stron w eksporcie i w Wordzie może się różnić.
-        </p>
-        <p class="mb-3 text-center text-sm text-danger" x-show="overflow" x-cloak>Niektóre bloki są wyższe niż strona A4 i zostały ucięte w podglądzie.</p>
-        <div x-ref="sheets" class="mx-auto flex w-fit flex-col gap-6" :style="background ? `--ct-bg: url('${background.url}')` : ''"></div>
-      </div>
-    </main>
+    @include('guesstimate.contract-templates.partials.sheets')
 
     <aside class="w-full shrink-0 overflow-y-auto border-l border-line bg-surface lg:w-80">
       @if (! $isCurrent)

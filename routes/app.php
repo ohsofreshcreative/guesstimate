@@ -127,6 +127,9 @@ Route::prefix('app')->name('gst.')->group(function () {
 		Route::post('umowy/{contract}/wartosci', [ContractController::class, 'saveValues'])->whereNumber('contract')->name('contracts.values');
 		Route::post('umowy/{contract}/zatwierdz', [ContractController::class, 'approve'])->whereNumber('contract')->name('contracts.approve');
 		Route::post('umowy/{contract}/odswiez', [ContractController::class, 'refresh'])->whereNumber('contract')->name('contracts.refresh');
+		Route::get('umowy/{contract}/tresc', [ContractController::class, 'edit'])->whereNumber('contract')->name('contracts.edit');
+		Route::post('umowy/{contract}/tresc', [ContractController::class, 'saveText'])->whereNumber('contract')->name('contracts.text');
+		Route::post('umowy/{contract}/nowa-wersja', [ContractController::class, 'newVersion'])->whereNumber('contract')->name('contracts.new-version');
 	});
 
 	Route::middleware('gst.can:' . Capabilities::MANAGE_CONTRACT_TEMPLATES)->group(function () {

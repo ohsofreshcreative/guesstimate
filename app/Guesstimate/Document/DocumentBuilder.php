@@ -73,8 +73,8 @@ final class DocumentBuilder
 
 			$type = Pages::type($key, $page);
 			$extra = Pages::isExtra($key);
-			$filled = $type === Pages::CUSTOM
-				? trim((string) ($page['heading'] ?? '')) !== '' || ! OfferContent::isEmpty((string) ($page['html'] ?? ''))
+			$filled = Pages::isCustom($type)
+				? trim((string) ($page['heading'] ?? '')) !== '' || ! OfferContent::isEmpty((string) ($page['html'] ?? '')) || ! empty($page['items'])
 				: $has[$type];
 			$hidden = match (true) {
 				($extra || in_array($type, Pages::OPTIONAL, true)) && empty($page['enabled']) => 'disabled',
@@ -111,7 +111,7 @@ final class DocumentBuilder
 				'heading' => self::heading($type, $page['heading'] ?? null, $version),
 				'hidden' => $hidden,
 				// Klucze tylko przy ustawionych wartościach: inaczej każda aktywna publikacja wyglądałaby na nieaktualną.
-			] + ($extra ? ['type' => $type] : []) + ($type === Pages::CUSTOM ? ['html' => OfferContent::clean($page['html'] ?? '')] : []) + ($crop ? ['image_crop' => $crop] : []) + ($fields ? ['fields' => $fields] : []) + ($polish ? ['polish' => $polish] : []);
+			] + ($extra ? ['type' => $type] : []) + (Pages::isCustom($type) ? ['html' => OfferContent::clean($page['html'] ?? '', headings: true)] : []) + (isset(Pages::CUSTOM_ITEMS[$type]) ? ['items' => array_values((array) ($page['items'] ?? []))] : []) + ($crop ? ['image_crop' => $crop] : []) + ($fields ? ['fields' => $fields] : []) + ($polish ? ['polish' => $polish] : []);
 		}
 
 		$logoId = (int) ($global['logo_attachment_id'] ?? 0);

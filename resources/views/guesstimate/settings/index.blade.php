@@ -31,6 +31,10 @@
     @include('guesstimate.settings.partials.contractor')
   @endif
 
+  @if ($section === 'umowy')
+    @include('guesstimate.settings.partials.contract-page')
+  @endif
+
   @if ($section === 'tla')
     @include('guesstimate.settings.partials.backgrounds')
   @endif

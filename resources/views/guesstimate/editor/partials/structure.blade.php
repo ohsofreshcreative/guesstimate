@@ -28,7 +28,12 @@
   </ol>
 
   @if ($config['editable'])
-    <button type="button" class="{{ $secondary }} mt-3" x-on:click="addCustomPage(); tab = 'page'" :disabled="extraCount >= {{ $config['maxExtraPages'] }}" data-page-add>+ Dodaj własną stronę</button>
-    <p class="mt-1 text-xs text-ink-muted">Nowa strona pojawi się za wybraną. Treść wpiszesz w edytorze tekstu, wygląd ustawisz jak na innych stronach.</p>
+    <p class="mt-4 text-sm font-medium">Dodaj stronę z szablonu</p>
+    <div class="mt-1.5 grid grid-cols-2 gap-2">
+      @foreach ($config['customTypes'] as $type => $typeLabel)
+        <button type="button" class="{{ $secondary }}" x-on:click="addCustomPage('{{ $type }}'); tab = 'page'" :disabled="extraCount >= {{ $config['maxExtraPages'] }}" data-page-add="{{ $type }}">+ {{ $typeLabel }}</button>
+      @endforeach
+    </div>
+    <p class="mt-1 text-xs text-ink-muted">Nowa strona pojawi się za wybraną. Treść i pozycje (tabela, kafelki, kroki) należą tylko do tej strony; wygląd ustawisz jak na innych stronach.</p>
   @endif
 </div>
