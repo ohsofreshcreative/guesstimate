@@ -9,6 +9,7 @@ use App\Guesstimate\Offers\Offer;
 use App\Guesstimate\Offers\OfferContent;
 use App\Guesstimate\Offers\OfferPolicy;
 use App\Guesstimate\Offers\OfferVersion;
+use App\Guesstimate\Offers\SupportPackages;
 use App\Guesstimate\Settings\SettingsRepository;
 use App\Guesstimate\Support\Input;
 
@@ -60,7 +61,11 @@ final class DocumentEditor
 				'fields' => $extra ? null : FieldLayout::normalize($page['fields'] ?? null, $key),
 				'polish' => PagePolish::normalize($page['polish'] ?? null, $type),
 				'heading' => $page['heading'] ?? null,
-			] + (Pages::isCustom($type) ? ['html' => (string) ($page['html'] ?? '')] : []) + (isset(Pages::CUSTOM_ITEMS[$type]) ? ['items' => array_values((array) ($page['items'] ?? []))] : []);
+			] + (Pages::hasHtml($type) ? ['html' => (string) ($page['html'] ?? '')] : []) + (isset(Pages::CUSTOM_ITEMS[$type]) ? ['items' => array_values((array) ($page['items'] ?? []))] : []);
+		}
+
+		if (isset($doc['support'])) {
+			$doc['support'] = SupportPackages::editorState($doc['support']);
 		}
 
 		return ['content' => OfferContent::normalize($version->content), 'document' => $doc];
@@ -120,11 +125,12 @@ final class DocumentEditor
 		// Definicje typów stron; lista stron (gotowe i dodatkowe) wynika ze stanu: document.page_order.
 		$types = [];
 
-		foreach (Pages::TYPES + Pages::CUSTOM_TYPES as $key => $label) {
+		foreach (Pages::PAGES + Pages::CUSTOM_TYPES as $key => $label) {
 			$types[$key] = [
 				'type' => $key,
 				'label' => $key === Pages::CUSTOM ? Pages::CUSTOM_LABEL : $label,
 				'custom' => Pages::isCustom($key),
+				'html' => Pages::hasHtml($key),
 				'items' => Pages::CUSTOM_ITEMS[$key] ?? null,
 				'optional' => in_array($key, Pages::OPTIONAL, true),
 				'fit' => in_array($key, Pages::FIT, true),
@@ -148,6 +154,12 @@ final class DocumentEditor
 				'state' => $state,
 				'types' => $types,
 				'maxExtraPages' => Pages::MAX_EXTRA,
+				// Oferta support: pakiety i punkty w `document.support` (SupportPackages).
+				'support' => $version->isSupport() ? [
+					'colors' => SupportPackages::COLORS,
+					'maxPackages' => SupportPackages::MAX_PACKAGES,
+					'maxPoints' => SupportPackages::MAX_POINTS,
+				] : null,
 				'customTypes' => Pages::CUSTOM_TYPES,
 				'library' => DocumentDesigner::library(),
 				'folders' => MediaLibrary::tree(MediaLibrary::folders()),

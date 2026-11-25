@@ -17,7 +17,7 @@
   $input = 'block w-full rounded-control border-line-strong px-3 py-1.5 text-sm focus:border-accent focus:ring-accent';
   $label = 'mb-1 block text-sm font-medium';
   $section = 'border-b border-line px-4 py-4';
-  $steps = \App\Guesstimate\Http\Controllers\WizardController::STEPS;
+  $steps = \App\Guesstimate\Http\Controllers\WizardController::steps($version->isSupport());
 @endphp
 
 @section('title', 'Dokument – ' . $offer->number)
@@ -41,9 +41,9 @@
       <nav class="hidden items-center gap-1 xl:flex" aria-label="Kroki kreatora">
         @foreach ($steps as $number => $stepLabel)
           @if ($number === 6)
-            <span class="rounded-control bg-ink px-2 py-1 text-xs font-medium text-white" aria-current="step">{{ $number }}. {{ $stepLabel }}</span>
+            <span class="rounded-control bg-ink px-2 py-1 text-xs font-medium text-white" aria-current="step">{{ $loop->iteration }}. {{ $stepLabel }}</span>
           @else
-            <a href="{{ route('gst.offers.wizard', ['offer' => $offer, 'step' => $number]) }}" class="rounded-control px-2 py-1 text-xs text-ink-soft hover:bg-canvas hover:text-ink">{{ $number }}. {{ $stepLabel }}</a>
+            <a href="{{ route('gst.offers.wizard', ['offer' => $offer, 'step' => $number]) }}" class="rounded-control px-2 py-1 text-xs text-ink-soft hover:bg-canvas hover:text-ink">{{ $loop->iteration }}. {{ $stepLabel }}</a>
           @endif
         @endforeach
       </nav>

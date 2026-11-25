@@ -3,6 +3,7 @@
 namespace App\Guesstimate\Document;
 
 use App\Guesstimate\Offers\OfferContent;
+use App\Guesstimate\Offers\SupportPackages;
 use App\Guesstimate\Support\Input;
 
 /**
@@ -103,6 +104,13 @@ final class DocumentForm
 			'next_steps_note' => $text($input['next_steps_note'] ?? '', 300),
 			'contact_user_id' => $contactId ?: null,
 		]);
+
+		// Pakiety oferty support (tylko gdy dokument je ma i formularz je wysłał).
+		if (array_key_exists('support', $current) && array_key_exists('support', $input)) {
+			$support = SupportPackages::validate($input['support']);
+			$data['support'] = $support['data'];
+			$errors += collect($support['errors'])->mapWithKeys(fn ($m, $k) => ['support.' . $k => $m])->all();
+		}
 
 		// Tylko gdy formularz zna tę opcję: krok 5 kreatora jej nie wysyła i nie może jej skasować.
 		if (array_key_exists('layout_mode', $input)) {
@@ -259,7 +267,7 @@ final class DocumentForm
 				}
 			}
 
-			if (array_key_exists('html', $row) && Pages::isCustom($type)) {
+			if (array_key_exists('html', $row) && Pages::hasHtml($type)) {
 				$html = OfferContent::clean($row['html'], headings: true);
 
 				if (mb_strlen($html) > Pages::MAX_CUSTOM_HTML) {

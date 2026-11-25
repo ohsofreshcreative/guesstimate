@@ -5,6 +5,7 @@ namespace App\Guesstimate\Document;
 use App\Guesstimate\Offers\Offer;
 use App\Guesstimate\Offers\OfferContent;
 use App\Guesstimate\Offers\OfferVersion;
+use App\Guesstimate\Offers\SupportPackages;
 
 /**
  * Część dokumentowa snapshotu publikacji: kolejność i tła stron, okładka, usługi dodatkowe, realizacje,
@@ -50,6 +51,8 @@ final class DocumentBuilder
 			}
 		}
 
+		$support = isset($doc['support']) ? SupportPackages::present($doc['support'], (string) $version->currency) : null;
+
 		$has = [
 			'cover' => true,
 			'situation' => ! OfferContent::isEmpty($content['situation'] ?? ''),
@@ -59,6 +62,8 @@ final class DocumentBuilder
 			'references' => (bool) $referenceItems,
 			'next_steps' => (bool) $doc['next_steps'],
 			'contact' => true,
+			'support_packages' => (bool) ($support['packages'] ?? []),
+			'support_legend' => (bool) array_filter(array_column($support['legend'] ?? [], 'items')),
 		];
 
 		$backgrounds = Background::whereIn('id', array_filter(array_column($doc['pages'], 'background_id')) ?: [0])->get()->keyBy('id');
@@ -111,7 +116,7 @@ final class DocumentBuilder
 				'heading' => self::heading($type, $page['heading'] ?? null, $version),
 				'hidden' => $hidden,
 				// Klucze tylko przy ustawionych wartościach: inaczej każda aktywna publikacja wyglądałaby na nieaktualną.
-			] + ($extra ? ['type' => $type] : []) + (Pages::isCustom($type) ? ['html' => OfferContent::clean($page['html'] ?? '', headings: true)] : []) + (isset(Pages::CUSTOM_ITEMS[$type]) ? ['items' => array_values((array) ($page['items'] ?? []))] : []) + ($crop ? ['image_crop' => $crop] : []) + ($fields ? ['fields' => $fields] : []) + ($polish ? ['polish' => $polish] : []);
+			] + ($extra ? ['type' => $type] : []) + (Pages::hasHtml($type) ? ['html' => OfferContent::clean($page['html'] ?? '', headings: true)] : []) + (isset(Pages::CUSTOM_ITEMS[$type]) ? ['items' => array_values((array) ($page['items'] ?? []))] : []) + ($crop ? ['image_crop' => $crop] : []) + ($fields ? ['fields' => $fields] : []) + ($polish ? ['polish' => $polish] : []);
 		}
 
 		$logoId = (int) ($global['logo_attachment_id'] ?? 0);
@@ -133,7 +138,7 @@ final class DocumentBuilder
 			'references' => ['intro' => Markup::parts($doc['references_intro']), 'items' => $referenceItems],
 			'next_steps' => ['items' => $doc['next_steps'], 'note' => Markup::parts($doc['next_steps_note'])],
 			'contact' => Contacts::resolve($doc['contact_user_id'] ?? $offer->author_id, $settings),
-		];
+		] + ($support ? ['support' => $support] : []);
 	}
 
 	/**

@@ -3,6 +3,7 @@
 namespace App\Guesstimate\Document;
 
 use App\Guesstimate\Offers\OfferVersion;
+use App\Guesstimate\Offers\SupportPackages;
 
 /**
  * Ustawienia dokumentu wersji oferty. Nowa oferta dostaje kopię ustawień z panelu (w tym domyślne tła);
@@ -15,15 +16,20 @@ final class DocumentSettings
 
 	/**
 	 * @param  array  $settings  ustawienia globalne (SettingsRepository::all())
+	 * @param  bool  $support  oferta pakietów support: okładka, pakiety, legenda i kontakt ze wzoru w ustawieniach
 	 */
-	public static function initial(array $settings, ?int $contactUserId = null): array
+	public static function initial(array $settings, ?int $contactUserId = null, bool $support = false): array
 	{
 		$doc = (array) ($settings['document'] ?? []);
 		$backgrounds = (array) ($doc['backgrounds'] ?? []);
 		$pages = [];
 
-		foreach (array_keys(Pages::TYPES) as $key) {
+		foreach (array_keys(Pages::base($support)) as $key) {
 			$pages[$key] = Pages::blank($key, isset($backgrounds[$key]) && $backgrounds[$key] ? (int) $backgrounds[$key] : null);
+		}
+
+		if ($support) {
+			return self::initialSupport($settings, $pages, $contactUserId);
 		}
 
 		return [
@@ -46,11 +52,44 @@ final class DocumentSettings
 	}
 
 	/**
+	 * Dokument oferty support: teksty i pakiety z kopii wzoru. Pola stron projektu zostają puste, bo tych stron tu nie ma.
+	 */
+	private static function initialSupport(array $settings, array $pages, ?int $contactUserId): array
+	{
+		$template = SupportPackages::template($settings);
+
+		foreach (['support_packages' => 'packages', 'support_legend' => 'legend'] as $key => $prefix) {
+			$heading = $template[$prefix . '_heading'];
+			$pages[$key]['heading'] = $heading === '' || $heading === Pages::HEADINGS[$key] ? null : $heading;
+			$pages[$key]['html'] = $template[$prefix . '_intro'];
+		}
+
+		return [
+			'cover_heading' => $template['cover_heading'],
+			'cover_lead' => $template['cover_lead'],
+			'price_includes' => [],
+			'include_features' => false,
+			'extras_intro' => '',
+			'extras' => [],
+			'references_intro' => '',
+			'reference_ids' => [],
+			'next_steps' => [],
+			'next_steps_note' => '',
+			'contact_user_id' => $contactUserId,
+			'pages' => $pages,
+			'page_order' => array_keys($pages),
+			'fit_report' => [],
+			'support' => ['packages' => $template['packages'], 'points' => $template['points']],
+		];
+	}
+
+	/**
 	 * Ustawienia dokumentu wersji; starsze wersje bez ustawień dostają wartości startowe (bez zapisu).
 	 */
 	public static function forVersion(OfferVersion $version, array $settings): array
 	{
-		$initial = self::initial($settings, $version->offer?->author_id);
+		$support = $version->isSupport();
+		$initial = self::initial($settings, $version->offer?->author_id, $support);
 		$stored = (array) ($version->document ?? []);
 
 		if (! $stored) {
@@ -62,7 +101,7 @@ final class DocumentSettings
 
 		// Strony zapisane przed edytorem wizualnym nie mają układu, zdjęcia ani nagłówka — dostają wartości domyślne
 		// (zapisane tło zostaje). Kolejność stron zawsze z Pages::TYPES (MySQL sortuje klucze JSON).
-		foreach (array_keys(Pages::TYPES) as $key) {
+		foreach (array_keys(Pages::base($support)) as $key) {
 			$storedPage = (array) ($stored['pages'][$key] ?? []);
 			$page = $storedPage ? array_replace(Pages::blank($key), $storedPage) : $initial['pages'][$key];
 			$page['layout'] = Pages::layout($key, $page['layout'] ?? null);
@@ -73,7 +112,7 @@ final class DocumentSettings
 		foreach ((array) ($stored['pages'] ?? []) as $id => $storedPage) {
 			$id = (string) $id;
 
-			if (! Pages::isExtra($id) || ! is_array($storedPage) || ! Pages::extraType($storedPage['type'] ?? null) || count($pages) >= count(Pages::TYPES) + Pages::MAX_EXTRA) {
+			if (! Pages::isExtra($id) || ! is_array($storedPage) || ! Pages::extraType($storedPage['type'] ?? null) || count($pages) >= count(Pages::base($support)) + Pages::MAX_EXTRA) {
 				continue;
 			}
 
@@ -86,6 +125,12 @@ final class DocumentSettings
 		$merged['pages'] = $pages;
 		$merged['page_order'] = Pages::order($pages, $stored['page_order'] ?? null);
 		$merged['fit_report'] = (array) ($stored['fit_report'] ?? []);
+
+		if ($support) {
+			$merged['support'] = SupportPackages::normalize($stored['support'] ?? $initial['support']);
+		} else {
+			unset($merged['support']);
+		}
 
 		return $merged;
 	}
@@ -120,8 +165,8 @@ final class DocumentSettings
 	 */
 	public static function activeFields(array $doc, string $key): ?array
 	{
-		// Strony dodatkowe zawsze mają układ z szablonu.
-		if (Pages::isExtra($key)) {
+		// Strony dodatkowe i strony support zawsze mają układ z szablonu.
+		if (Pages::isExtra($key) || isset(Pages::SUPPORT_TYPES[$key])) {
 			return null;
 		}
 

@@ -40,6 +40,10 @@ class VersionCalculator
 			return $version;
 		}
 
+		if ($version->isSupport()) {
+			return $this->support($version);
+		}
+
 		$version->unsetRelations();
 		[$result, $error] = $this->preview(VersionSnapshot::of($version));
 
@@ -57,6 +61,33 @@ class VersionCalculator
 			'high_max' => $result['levels']['high']['total']['max'] ?? null,
 			'recurring_monthly' => $result['costs']['monthly'] ?? 0,
 			'recurring_yearly' => $result['costs']['yearly'] ?? 0,
+		])->save();
+
+		return $version;
+	}
+
+	/**
+	 * Oferta support nie ma kalkulacji godzin: wynik to tylko znacznik modelu, a kolumny cen (listy, statystyki)
+	 * pokazują najniższą i najwyższą cenę pakietu we wszystkich wariantach.
+	 */
+	private function support(OfferVersion $version): OfferVersion
+	{
+		[$min, $max] = SupportPackages::range((array) ($version->document['support'] ?? []));
+
+		$version->fill([
+			'result' => ['model' => OfferVersion::SUPPORT_TYPE],
+			'result_error' => null,
+			'engine_version' => OfferVersion::SUPPORT_TYPE,
+			'hours_min' => null,
+			'hours_max' => null,
+			'low_min' => $min,
+			'low_max' => $max,
+			'mid_min' => $min,
+			'mid_max' => $max,
+			'high_min' => $min,
+			'high_max' => $max,
+			'recurring_monthly' => 0,
+			'recurring_yearly' => 0,
 		])->save();
 
 		return $version;

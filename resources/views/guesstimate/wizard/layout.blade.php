@@ -19,7 +19,7 @@
 
   <header class="mb-6">
     <h1 class="text-3xl font-semibold tracking-tight">
-      @if ($offer){{ $version->project_name }}@else Nowa oferta @endif
+      @if ($offer){{ $version->project_name }}@elseif (! empty($support)) Nowa oferta support @else Nowa oferta @endif
     </h1>
     @if ($offer)
       <p class="mt-1 text-ink-soft">{{ $offer->number }} · wersja {{ $version->version_no }} · {{ $offer->status->label() }} · online: {{ ($offer->publication_status ?? \App\Guesstimate\Offers\PublicationStatus::Draft)->label() }}</p>
@@ -33,7 +33,7 @@
         <li class="flex-1 whitespace-nowrap">
           @if ($reachable && $number !== $step)
             <a href="{{ route('gst.offers.wizard', ['offer' => $offer, 'step' => $number]) }}" class="flex items-center gap-2 rounded-control px-3 py-2 text-ink-soft hover:bg-canvas hover:text-ink">
-              <span class="flex size-6 shrink-0 items-center justify-center rounded-full border border-line-strong text-sm">{{ $number }}</span>
+              <span class="flex size-6 shrink-0 items-center justify-center rounded-full border border-line-strong text-sm">{{ $loop->iteration }}</span>
               {{ $label }}
             </a>
           @else
@@ -46,7 +46,7 @@
                 'flex size-6 shrink-0 items-center justify-center rounded-full text-sm',
                 'bg-white text-ink' => $number === $step,
                 'border border-line' => $number !== $step,
-              ])>{{ $number }}</span>
+              ])>{{ $loop->iteration }}</span>
               {{ $label }}
             </span>
           @endif

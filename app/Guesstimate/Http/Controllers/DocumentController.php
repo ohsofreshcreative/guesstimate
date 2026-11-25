@@ -117,7 +117,8 @@ class DocumentController extends Controller
 		$document['fit_report'] = $this->report((array) $request->input('fit', []), $document, $result['content']);
 
 		$version->update(['content' => $result['content'], 'document' => $document]);
-		$this->offers->touch($offer, $version->fresh(), 'document', recalculate: false);
+		// Ceny pakietów support są w dokumencie, więc tylko tu zapis odświeża kolumny cen (listy ofert, statystyki).
+		$this->offers->touch($offer, $version->fresh(), 'document', recalculate: $version->isSupport());
 
 		return response()->json($this->status($offer->fresh()));
 	}

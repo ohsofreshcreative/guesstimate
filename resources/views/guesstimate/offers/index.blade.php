@@ -6,6 +6,7 @@
   <x-gst.page-header title="Oferty" :description="$clientName ? 'Oferty klienta ' . $clientName : 'Archiwum wycen z wersjami, statusami i historią zmian.'">
     @if ($canCreate)
       <x-slot:actions>
+        <x-gst.button :href="route('gst.offers.create', ['rodzaj' => 'support'])" variant="secondary" icon="plus">Oferta support</x-gst.button>
         <x-gst.button :href="route('gst.offers.create')" icon="plus">Nowa oferta</x-gst.button>
       </x-slot:actions>
     @endif

@@ -9,7 +9,7 @@
   </div>
 </template>
 
-<template x-if="pageType === 'pricing' || pageType === 'references'">
+<template x-if="['pricing', 'references'].includes(pageType)">
   <div class="{{ $section }} space-y-3" data-polish-section>
     <h3 class="font-semibold">Wygląd strony</h3>
     <label class="flex items-center gap-2 text-sm">

@@ -24,6 +24,11 @@ final class PublicOffer
 	public static function build(Offer $offer, OfferVersion $version, ?array $settings = null, bool $editor = false): array
 	{
 		$settings ??= app(SettingsRepository::class)->all();
+
+		if ($version->isSupport()) {
+			return self::support($offer, $version, $settings, $editor);
+		}
+
 		$version->loadMissing(['nodes', 'features', 'workItems', 'costs']);
 		$result = $version->result;
 		$variant = RiskLevel::tryFrom($version->selected_variant) ?? RiskLevel::Mid;
@@ -69,6 +74,28 @@ final class PublicOffer
 				'amount' => Format::money(Decimal::money(Decimal::of((string) $c->quantity), (int) $c->amount), $currency),
 				'quantity' => (float) $c->quantity !== 1.0 ? Format::hours((string) $c->quantity, false) : null,
 			])->values()->all(),
+		];
+	}
+
+	/**
+	 * Oferta support: bez wyceny projektu i zakresu prac — ceny są w pakietach na stronach dokumentu.
+	 */
+	private static function support(Offer $offer, OfferVersion $version, array $settings, bool $editor): array
+	{
+		$content = OfferContent::blank();
+
+		return [
+			'schema' => self::SCHEMA,
+			'number' => $offer->number,
+			'title' => $version->project_name,
+			'client' => $offer->client?->company_name,
+			'project_type' => $version->projectTypeLabel(),
+			'currency' => $version->currency,
+			'content' => $content,
+			'price' => null,
+			'summary' => ['ux' => null, 'pages' => [], 'features' => [], 'work' => []],
+			'document' => DocumentBuilder::build($offer, $version, $settings, $content, $editor),
+			'costs' => [],
 		];
 	}
 }

@@ -32,8 +32,10 @@ class OfferService
 		$scope = $settings['ux_scopes'][$data['ux_scope']] ?? throw new InvalidArgumentException('Nieznany zakres UX.');
 		$userId = get_current_user_id();
 		$snapshot = BudgetSettings::snapshot($settings);
+		// Oferta support: dokument z kopii wzoru pakietów, od razu do edytora dokumentu (bez kroków kalkulacji).
+		$support = $data['project_type'] === OfferVersion::SUPPORT_TYPE;
 
-		$offer = DB::transaction(function () use ($data, $settings, $scope, $userId, $snapshot) {
+		$offer = DB::transaction(function () use ($data, $settings, $scope, $userId, $snapshot, $support) {
 			// Klient nie może zostać usunięty w trakcie tworzenia oferty (blokada wiersza, zob. ClientService::delete).
 			ClientService::lockActive((int) $data['client_id']);
 
@@ -68,8 +70,8 @@ class OfferService
 				'budget' => BudgetSettings::budget($snapshot, $data['project_type'], null, $data['custom_units'] ?? null),
 				'selected_variant' => 'mid',
 				'content' => OfferContent::blank(),
-				'document' => DocumentSettings::initial($settings, $userId),
-				'wizard_step' => 2,
+				'document' => DocumentSettings::initial($settings, $userId, $support),
+				'wizard_step' => $support ? 6 : 2,
 				'created_by' => $userId,
 				'updated_by' => $userId,
 			]);

@@ -24,6 +24,7 @@ class OfferVersion extends Model
 		'landing' => 'Landing page',
 		'other' => 'Inny',
 		'webapp' => 'Aplikacja webowa',
+		'support' => 'Pakiety support',
 	];
 
 	/**
@@ -39,6 +40,9 @@ class OfferVersion extends Model
 	public const CUSTOM_UNITS_TYPE = 'other';
 
 	public const MAX_CUSTOM_UNITS = 999;
+
+	/** Oferta pakietów support: bez kalkulacji godzin, ceny pakietów są w `document.support` (SupportPackages). */
+	public const SUPPORT_TYPE = 'support';
 
 	protected $table = 'gst_offer_versions';
 
@@ -107,6 +111,11 @@ class OfferVersion extends Model
 	public function isBudget(): bool
 	{
 		return $this->calc_model === BudgetPricing::MODEL;
+	}
+
+	public function isSupport(): bool
+	{
+		return $this->project_type === self::SUPPORT_TYPE;
 	}
 
 	public function projectTypeLabel(): string

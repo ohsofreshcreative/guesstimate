@@ -93,6 +93,8 @@ TXT;
 			'numbering' => ['prefix' => 'OSF', 'padding' => 4],
 			'contractor' => ['company_name' => '', 'address' => '', 'nip' => '', 'representative' => ''],
 			'contract_page' => \App\Guesstimate\Contracts\PageSetup::DEFAULTS,
+			// Wzór oferty pakietów support (teksty stron, pakiety, punkty): kopiowany do każdej nowej oferty support.
+			'support_packages' => \App\Guesstimate\Offers\SupportPackages::DEFAULTS,
 			'stages' => [
 				['key' => 'discovery', 'name' => 'Warsztaty Discovery', 'enabled' => true, 'in_pool' => false, 'percent' => '0', 'fixed_amount' => 200000],
 				['key' => 'ux', 'name' => 'UX Design', 'enabled' => true, 'in_pool' => true, 'percent' => '20', 'fixed_amount' => null],

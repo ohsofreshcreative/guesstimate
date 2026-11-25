@@ -18,6 +18,15 @@ final class Pages
 		'contact' => 'Kontakt',
 	];
 
+	/** Strony oferty support (zamiast stron projektu między okładką a kontaktem). Dane: `document.support`. */
+	public const SUPPORT_TYPES = [
+		'support_packages' => 'Pakiety support',
+		'support_legend' => 'Legenda pakietów',
+	];
+
+	/** Wszystkie strony gotowe (projekt i support) — etykiety, typy, kolejność. */
+	public const PAGES = self::TYPES + self::SUPPORT_TYPES;
+
 	/**
 	 * Strony dodatkowe (`extra_N`): własna strona z treścią z edytora albo kopia strony gotowego typu (te same dane,
 	 * własny wygląd). Typ zapisuje się w `pages.<id>.type`, kolejność wszystkich stron w `document.page_order`.
@@ -49,7 +58,7 @@ final class Pages
 	public const NO_COPY = ['situation'];
 
 	/** Strony, które można wyłączyć dla oferty. */
-	public const OPTIONAL = ['extras', 'references', 'next_steps'];
+	public const OPTIONAL = ['extras', 'references', 'next_steps', 'support_legend'];
 
 	/** Gotowe układy stron. */
 	public const LAYOUTS = [
@@ -73,6 +82,8 @@ final class Pages
 		'custom_table' => ['full'],
 		'custom_tiles' => ['tiles', 'full'],
 		'custom_steps' => ['text_image', 'image_text', 'full'],
+		'support_packages' => ['full'],
+		'support_legend' => ['full'],
 	];
 
 	/** Układy ze zdjęciem strony obok treści. */
@@ -90,6 +101,8 @@ final class Pages
 		'references' => 'W **kooperacji** siła',
 		'next_steps' => '**Kolejne kroki**',
 		'contact' => 'Zapraszam do kontaktu',
+		'support_packages' => 'Pakiety **support**',
+		'support_legend' => 'Co zawierają pakiety – **legenda**',
 	];
 
 	/** Strony, które zawsze mieszczą się na jednej stronie A4 (dopasowanie typografii zamiast stron „cd.”). */
@@ -100,6 +113,24 @@ final class Pages
 	public const MAX_STEPS = 6;
 	public const MAX_INCLUDES = 16;
 	public const MAX_HEADING = 160;
+
+	/**
+	 * Strony gotowe dokumentu danego rodzaju oferty, w kolejności domyślnej.
+	 *
+	 * @return array<string, string>
+	 */
+	public static function base(bool $support): array
+	{
+		return $support
+			? ['cover' => self::TYPES['cover']] + self::SUPPORT_TYPES + ['contact' => self::TYPES['contact']]
+			: self::TYPES;
+	}
+
+	/** Strona z własnym wstępem lub treścią z edytora WYSIWYG (`pages.<id>.html`). */
+	public static function hasHtml(mixed $type): bool
+	{
+		return self::isCustom($type) || (is_string($type) && isset(self::SUPPORT_TYPES[$type]));
+	}
 
 	public static function defaultLayout(string $key): string
 	{
@@ -148,13 +179,13 @@ final class Pages
 	/** Typ strony: klucz strony gotowej albo typ zapisany w stronie dodatkowej. */
 	public static function type(string $id, array $page = []): string
 	{
-		return isset(self::TYPES[$id]) ? $id : (string) ($page['type'] ?? self::CUSTOM);
+		return isset(self::PAGES[$id]) ? $id : (string) ($page['type'] ?? self::CUSTOM);
 	}
 
 	public static function label(string $id, array $page = []): string
 	{
-		if (isset(self::TYPES[$id])) {
-			return self::TYPES[$id];
+		if (isset(self::PAGES[$id])) {
+			return self::PAGES[$id];
 		}
 
 		$type = self::type($id, $page);
@@ -170,7 +201,7 @@ final class Pages
 
 	/**
 	 * Kolejność stron: zapisana kolejność bez nieznanych i powtórzonych kluczy, a brakujące strony na końcu
-	 * (gotowe w kolejności TYPES, dodatkowe według numeru — MySQL sortuje klucze JSON po swojemu).
+	 * (gotowe w kolejności domyślnej rodzaju oferty, dodatkowe według numeru — MySQL sortuje klucze JSON po swojemu).
 	 *
 	 * @return list<string>
 	 */
@@ -187,7 +218,10 @@ final class Pages
 		$extras = array_values(array_filter(array_map('strval', array_keys($pages)), fn ($id) => self::isExtra($id)));
 		usort($extras, fn ($a, $b) => (int) substr($a, 6) <=> (int) substr($b, 6));
 
-		foreach ([...array_keys(self::TYPES), ...$extras] as $id) {
+		// Kolejność domyślna rodzaju dokumentu: w ofercie support strony pakietów stoją przed kontaktem.
+		$base = array_keys(self::base((bool) array_intersect_key($pages, self::SUPPORT_TYPES)));
+
+		foreach ([...$base, ...$extras] as $id) {
 			if (isset($pages[$id]) && ! in_array($id, $out, true)) {
 				$out[] = $id;
 			}

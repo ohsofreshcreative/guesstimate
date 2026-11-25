@@ -53,6 +53,12 @@ class WizardController extends Controller
 		6 => 'Dokument i publikacja',
 	];
 
+	/** Oferta support: dane oferty i od razu dokument (pakiety, legenda) — bez kroków kalkulacji. */
+	public const SUPPORT_STEPS = [
+		1 => 'Oferta',
+		6 => 'Dokument i publikacja',
+	];
+
 	private const SECTIONS = [1 => 'info', 2 => 'sitemap', 3 => 'features', 4 => 'calculation', 5 => 'content'];
 
 	private const VIEWS = [1 => 'info', 2 => 'pages', 3 => 'features', 4 => 'calculation', 5 => 'content'];
@@ -68,20 +74,26 @@ class WizardController extends Controller
 	) {
 	}
 
+	public static function steps(bool $support): array
+	{
+		return $support ? self::SUPPORT_STEPS : self::STEPS;
+	}
+
 	public function create(Request $request)
 	{
 		abort_unless($this->policy->canCreate(), 403, 'Nie możesz tworzyć ofert.');
 
-		return view('guesstimate.wizard.info', $this->infoData(null, null, ['client_id' => (int) $request->query('klient', 0)]));
+		return view('guesstimate.wizard.info', $this->infoData(null, null, ['client_id' => (int) $request->query('klient', 0), 'support' => $request->query('rodzaj') === 'support']));
 	}
 
 	public function store(Request $request)
 	{
 		abort_unless($this->policy->canCreate(), 403, 'Nie możesz tworzyć ofert.');
-		$result = $this->form->info($request->all(), $this->settings->uxScopes());
+		$support = $request->input('kind') === OfferVersion::SUPPORT_TYPE;
+		$result = $this->form->info($request->all(), $this->settings->uxScopes(), null, $support);
 
 		if ($result['errors']) {
-			return $this->invalid('guesstimate.wizard.info', $this->infoData(null, null), $result['errors']);
+			return $this->invalid('guesstimate.wizard.info', $this->infoData(null, null, ['support' => $support]), $result['errors']);
 		}
 
 		try {
@@ -95,10 +107,10 @@ class WizardController extends Controller
 				return $this->offers->create($data);
 			});
 		} catch (ClientUnavailable $e) {
-			return $this->invalid('guesstimate.wizard.info', $this->infoData(null, null), ['client_id' => $e->getMessage()]);
+			return $this->invalid('guesstimate.wizard.info', $this->infoData(null, null, ['support' => $support]), ['client_id' => $e->getMessage()]);
 		}
 
-		return $this->redirectWith(route('gst.offers.wizard', ['offer' => $offer, 'step' => 2]), sprintf('Utworzono ofertę %s jako wersję roboczą.', $offer->number));
+		return $this->redirectWith(route('gst.offers.wizard', ['offer' => $offer, 'step' => $support ? 6 : 2]), sprintf('Utworzono ofertę %s jako wersję roboczą.', $offer->number));
 	}
 
 	public function show(Offer $offer, int $step)
@@ -106,6 +118,10 @@ class WizardController extends Controller
 		abort_unless(isset(self::STEPS[$step]), 404);
 		$this->policy->authorizeEdit($offer);
 		$version = $offer->currentVersion;
+
+		if ($skip = $this->supportStep($offer, $version, $step)) {
+			return $skip;
+		}
 
 		if ($blocked = $this->blocked($offer, $version, $step)) {
 			return $blocked;
@@ -129,6 +145,10 @@ class WizardController extends Controller
 			return redirect()->to(route('gst.offers.wizard', ['offer' => $offer, 'step' => 6]));
 		}
 
+		if ($skip = $this->supportStep($offer, $version, $step)) {
+			return $skip;
+		}
+
 		if ($blocked = $this->blocked($offer, $version, $step)) {
 			return $blocked;
 		}
@@ -147,12 +167,12 @@ class WizardController extends Controller
 
 		$this->offers->touch($offer, $version, self::SECTIONS[$step]);
 
-		$next = $request->input('action') === 'next' ? min(6, $step + 1) : $step;
+		$next = $request->input('action') === 'next' ? ($version->isSupport() ? 6 : min(6, $step + 1)) : $step;
 		$version->update(['wizard_step' => max($version->wizard_step, $next)]);
 
 		$message = $next === $step
 			? sprintf('Zapisano wersję roboczą o %s.', wp_date('H:i'))
-			: sprintf('Zapisano krok „%s”.', self::STEPS[$step]);
+			: sprintf('Zapisano krok „%s”.', self::steps($version->isSupport())[$step]);
 
 		return $this->redirectWith(route('gst.offers.wizard', ['offer' => $offer, 'step' => $next]), $message);
 	}
@@ -308,7 +328,7 @@ class WizardController extends Controller
 	private function saveInfo(Request $request, OfferVersion $version): array
 	{
 		$scopes = $version->settings_snapshot['ux_scopes'] ?? $this->settings->uxScopes();
-		$result = $this->form->info($request->all(), $scopes, $version->project_type);
+		$result = $this->form->info($request->all(), $scopes, $version->project_type, $version->isSupport());
 
 		if ($result['errors']) {
 			return $result['errors'];
@@ -335,8 +355,16 @@ class WizardController extends Controller
 			// Blokada klienta na czas zmiany oferty (zob. ClientService::delete).
 			ClientService::lockActive((int) $data['client_id']);
 
-			$scope = $scopes[$data['ux_scope']];
 			$version->offer->update(['client_id' => $data['client_id']]);
+
+			// Oferta support: rodzaj, zakres UX i parametry kalkulacji się nie zmieniają.
+			if ($version->isSupport()) {
+				$version->update(['project_name' => $data['project_name'], 'internal_notes' => $data['internal_notes']]);
+
+				return;
+			}
+
+			$scope = $scopes[$data['ux_scope']];
 			$version->update([
 				'project_name' => $data['project_name'],
 				'project_type' => $data['project_type'],
@@ -471,6 +499,16 @@ class WizardController extends Controller
 	}
 
 	/**
+	 * Oferta support nie ma kroków kalkulacji i treści (2–5): przekierowanie do dokumentu.
+	 */
+	private function supportStep(Offer $offer, OfferVersion $version, int $step)
+	{
+		return $version->isSupport() && ! isset(self::SUPPORT_STEPS[$step])
+			? redirect()->to(route('gst.offers.wizard', ['offer' => $offer, 'step' => 6]))
+			: null;
+	}
+
+	/**
 	 * Zablokowana, anulowana lub zapisana w starym modelu wersja: zamiast formularza strona z wyjaśnieniem.
 	 * Krok 6 (podgląd i publikacja) jest dostępny także dla zamrożonej wersji — publikacja nie zmienia wyceny.
 	 */
@@ -501,10 +539,11 @@ class WizardController extends Controller
 			'offer' => $offer,
 			'version' => $version,
 			'step' => $step,
-			'steps' => self::STEPS,
+			'steps' => self::steps($version->isSupport()),
 			'maxStep' => max(1, (int) $version->wizard_step),
-			'sidebarSummary' => BudgetPresenter::present($version->result, $version->currency, $version->selected_variant),
+			'sidebarSummary' => $version->isSupport() ? null : BudgetPresenter::present($version->result, $version->currency, $version->selected_variant),
 			'sidebarError' => $version->result_error,
+			'wide' => $version->isSupport(),
 		];
 
 		return array_merge($base, match ($step) {
@@ -523,14 +562,17 @@ class WizardController extends Controller
 		// Po błędzie walidacji zachowujemy klienta wybranego w formularzu.
 		$clientId = (int) (request()->input('client_id') ?: ($offer?->client_id ?? ($defaults['client_id'] ?? 0))) ?: null;
 		$client = $clientId ? Client::find($clientId) : null;
+		$support = $version ? $version->isSupport() : ! empty($defaults['support']);
 
 		return [
 			'offer' => $offer,
 			'version' => $version,
 			'step' => 1,
-			'steps' => self::STEPS,
+			'steps' => self::steps($support),
+			'support' => $support,
+			'wide' => $support,
 			'maxStep' => $version ? max(1, (int) $version->wizard_step) : 1,
-			'sidebarSummary' => $version ? BudgetPresenter::present($version->result, $version->currency, $version->selected_variant) : null,
+			'sidebarSummary' => $version && ! $support ? BudgetPresenter::present($version->result, $version->currency, $version->selected_variant) : null,
 			'sidebarError' => $version?->result_error,
 			'client' => $client ? ClientPresenter::card($client) : null,
 			'clientSearchUrl' => route('gst.clients.search'),

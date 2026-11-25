@@ -26,11 +26,19 @@ class OfferForm
 
 	/**
 	 * Krok 1: projekt — klient (lub nowy klient), nazwa, jeden rodzaj projektu, zakres UX, notatki wewnętrzne.
+	 * Oferta support ($support) ma tylko klienta, nazwę i notatki: rodzaj jest stały, a zakres UX (wymagany przez
+	 * kolumny wersji) to pierwszy zakres z ustawień i nie wpływa na nic.
 	 *
 	 * @return array{data: array|null, client: array|null, errors: array<string, string>}
 	 */
-	public function info(array $input, array $uxScopes, ?string $currentType = null): array
+	public function info(array $input, array $uxScopes, ?string $currentType = null, bool $support = false): array
 	{
+		if ($support) {
+			$input['project_type'] = OfferVersion::SUPPORT_TYPE;
+			$input['ux_scope'] = array_key_first($uxScopes);
+			$currentType = OfferVersion::SUPPORT_TYPE;
+		}
+
 		$errors = [];
 		$client = null;
 
@@ -48,7 +56,7 @@ class OfferForm
 		$name = Input::line($input['project_name'] ?? null);
 
 		if ($name === null || mb_strlen($name) > 190) {
-			$errors['project_name'] = 'Podaj nazwę projektu (do 190 znaków).';
+			$errors['project_name'] = $support ? 'Podaj nazwę oferty (do 190 znaków).' : 'Podaj nazwę projektu (do 190 znaków).';
 		}
 
 		$type = (string) ($input['project_type'] ?? '');

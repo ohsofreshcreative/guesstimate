@@ -8,6 +8,7 @@ import {
   alignRect, createItem, emptyHistory, GRID, moveRect, nextCopyId, pushHistory, redoHistory, reorder, SCHEMA, undoHistory,
 } from './field-layout.js';
 import { nonce, postJson } from './http.js';
+import { supportMethods } from './support-packages.js';
 
 const DESIGN_WIDTH = 1123; // A4 poziomo przy 96 dpi — „100%”
 const ZOOMS = { fit: null, 75: 0.75, 100: 1, 125: 1.25 };
@@ -59,6 +60,8 @@ export default (config) => ({
   busy: null,
   aiError: null,
   migration: null, // podgląd migracji: stan przed nią, do czasu zapisu nic nie trafia na serwer
+  support: config.support, // oferta support: paleta i limity pakietów (null w ofercie projektu)
+  ...supportMethods,
 
   init() {
     // Powrót przyciskiem „Wstecz” (bfcache) po publikacji: przycisk znów aktywny.
@@ -119,6 +122,8 @@ export default (config) => ({
   hiddenReason(key) { return this.summary.find((p) => p.key === key)?.hidden || null; },
 
   fieldError(name) { return this.errors[name] || null; },
+
+  supportError(key) { return this.fieldError(`document.support.${key}`); },
 
   /*--- Ramki podglądu ---*/
 

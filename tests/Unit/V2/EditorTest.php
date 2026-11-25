@@ -49,7 +49,7 @@ namespace Tests\Unit\V2 {
 			$this->assertFalse(Pages::hasMedia('tiles'));
 
 			foreach (Pages::PAGE_LAYOUTS as $key => $layouts) {
-				$this->assertTrue(isset(Pages::TYPES[$key]) || Pages::isCustom($key), $key);
+				$this->assertTrue(isset(Pages::PAGES[$key]) || Pages::isCustom($key), $key);
 				$this->assertSame([], array_diff($layouts, array_keys(Pages::LAYOUTS)));
 			}
 		}

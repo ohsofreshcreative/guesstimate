@@ -5,9 +5,20 @@
   $hasOld = isset($old);
   $v = fn ($key) => $hasOld ? data_get($old, $key) : ($values[$key] ?? null);
   $newClient = $hasOld && ! empty($old['new_client']);
+  $support ??= false;
 @endphp
 
 @section('step')
+  @unless ($offer)
+    {{-- Rodzaj nowej oferty: projekt (kreator z kalkulacją) albo pakiety support (od razu dokument). --}}
+    <nav class="mb-6 inline-flex gap-1 rounded-panel border border-line bg-surface p-1" aria-label="Rodzaj oferty">
+      @foreach (['' => 'Projekt strony', 'support' => 'Pakiety support'] as $kind => $kindLabel)
+        <a href="{{ route('gst.offers.create', array_filter(['rodzaj' => $kind, 'klient' => request()->query('klient')])) }}"
+          @class(['rounded-control px-3 py-1.5 text-sm', 'bg-ink font-medium text-white' => $support === ($kind === 'support'), 'text-ink-soft hover:bg-canvas hover:text-ink' => $support !== ($kind === 'support')])
+          @if ($support === ($kind === 'support')) aria-current="page" @endif>{{ $kindLabel }}</a>
+      @endforeach
+    </nav>
+  @endunless
   <form method="post"
     action="{{ $offer ? route('gst.offers.wizard.save', ['offer' => $offer, 'step' => 1]) : route('gst.offers.store') }}"
     x-data="{ dirty: false }"
@@ -16,6 +27,7 @@
     x-on:beforeunload.window="if (dirty) { $event.preventDefault(); $event.returnValue = '' }"
     novalidate>
     <x-gst.csrf />
+    @if ($support && ! $offer)<input type="hidden" name="kind" value="support">@endif
 
     <div class="space-y-6">
       <section class="rounded-panel border border-line bg-surface p-6 shadow-panel"
@@ -146,13 +158,17 @@
       </section>
 
       <section class="rounded-panel border border-line bg-surface p-6 shadow-panel">
-        <h2 class="text-lg font-semibold">Projekt</h2>
+        <h2 class="text-lg font-semibold">{{ $support ? 'Oferta support' : 'Projekt' }}</h2>
+        @if ($support)
+          <p class="mt-1 text-ink-soft">Pakiety, punkty, ceny i legenda pochodzą ze wzoru w ustawieniach. Po utworzeniu zmienisz je w edytorze dokumentu — tylko w tej ofercie.</p>
+        @endif
 
         <div class="mt-5 space-y-6">
-          <x-gst.field label="Nazwa projektu" for="f-project_name" :error="$errors['project_name'] ?? null" required>
-            <x-gst.input name="project_name" :value="$v('project_name')" :error="$errors['project_name'] ?? null" maxlength="190" required placeholder="np. Nowa strona internetowa restauracji" />
+          <x-gst.field :label="$support ? 'Nazwa oferty' : 'Nazwa projektu'" for="f-project_name" :error="$errors['project_name'] ?? null" required>
+            <x-gst.input name="project_name" :value="$v('project_name') ?? ($support && ! $offer ? 'Pakiety support' : null)" :error="$errors['project_name'] ?? null" maxlength="190" required :placeholder="$support ? 'np. Pakiety support' : 'np. Nowa strona internetowa restauracji'" />
           </x-gst.field>
 
+          @unless ($support)
           <fieldset x-data="{ type: @js((string) $v('project_type')) }">
             <legend class="mb-1.5 font-medium">Rodzaj projektu <span class="text-danger" aria-hidden="true">*</span></legend>
             <p class="mb-3 text-sm text-ink-muted">Jeden rodzaj na ofertę. Dodatkowe jednostki kalkulacyjne to osobna pozycja wyceny — nie są dopisywane do mapy strony.</p>
@@ -191,6 +207,7 @@
             </div>
             @if (! empty($errors['ux_scope']))<p class="mt-1.5 text-sm text-danger">{{ $errors['ux_scope'] }}</p>@endif
           </fieldset>
+          @endunless
 
           <details class="group rounded-control border border-line" @if ($v('internal_notes')) open @endif>
             <summary class="cursor-pointer list-none px-4 py-3 font-medium marker:hidden">
@@ -206,6 +223,6 @@
       </section>
     </div>
 
-    @include('guesstimate.wizard.partials.actions', ['nextLabel' => $offer ? 'Zapisz i dalej' : 'Utwórz ofertę i przejdź dalej'])
+    @include('guesstimate.wizard.partials.actions', ['nextLabel' => $offer ? 'Zapisz i dalej' : ($support ? 'Utwórz ofertę i przejdź do dokumentu' : 'Utwórz ofertę i przejdź dalej')])
   </form>
 @endsection

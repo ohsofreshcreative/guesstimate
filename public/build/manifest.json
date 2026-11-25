@@ -45,7 +45,7 @@
     "src": "editor.deps.json"
   },
   "resources/css/app.css": {
-    "file": "assets/app-BDshcVzH.css",
+    "file": "assets/app-CGD43Vdf.css",
     "name": "app",
     "names": [
       "app.css"
@@ -61,7 +61,7 @@
     ]
   },
   "resources/css/editor.css": {
-    "file": "assets/editor-B-XR_JER.css",
+    "file": "assets/editor-D2dAjhDy.css",
     "name": "editor",
     "names": [
       "editor.css"
@@ -77,7 +77,7 @@
     ]
   },
   "resources/css/guesstimate.css": {
-    "file": "assets/guesstimate-Xs9XoYyV.css",
+    "file": "assets/guesstimate-D1-6nYI_.css",
     "name": "guesstimate",
     "names": [
       "guesstimate.css"
@@ -92,7 +92,7 @@
     ]
   },
   "resources/css/offer.css": {
-    "file": "assets/offer-s1ezgIl_.css",
+    "file": "assets/offer-B6YoKT3K.css",
     "name": "offer",
     "names": [
       "offer.css"
@@ -310,7 +310,7 @@
     "isEntry": true
   },
   "resources/js/guesstimate.js": {
-    "file": "assets/guesstimate-DtkuiNd9.js",
+    "file": "assets/guesstimate-DP8zsP9C.js",
     "name": "guesstimate",
     "src": "resources/js/guesstimate.js",
     "isEntry": true,

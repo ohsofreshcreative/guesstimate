@@ -89,6 +89,10 @@ final class OfferSummary
 
 	public static function version(OfferVersion $version): array
 	{
+		if ($version->isSupport()) {
+			return self::supportVersion($version);
+		}
+
 		if ($version->isBudget()) {
 			return self::budgetVersion($version);
 		}
@@ -154,6 +158,26 @@ final class OfferSummary
 				'notes' => $c->notes,
 			])->all(),
 			'stages_disabled' => $version->stages->where('enabled', false)->pluck('name')->all(),
+		];
+	}
+
+	/**
+	 * Oferta pakietów support: pakiety z cenami i lista punktów (bez kalkulacji godzin).
+	 */
+	private static function supportVersion(OfferVersion $version): array
+	{
+		$support = SupportPackages::present((array) ($version->document['support'] ?? []), (string) $version->currency);
+
+		return [
+			'budget' => false,
+			'support' => true,
+			'project_name' => $version->project_name,
+			'type' => $version->projectTypeLabel(),
+			'internal_notes' => $version->internal_notes,
+			'locked' => $version->isLocked(),
+			'locked_at' => Format::date($version->locked_at, true),
+			'version_no' => $version->version_no,
+			'packages' => $support['packages'],
 		];
 	}
 

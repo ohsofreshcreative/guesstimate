@@ -16,6 +16,7 @@ use App\Guesstimate\Integrations\ClickUp\OAuthApp;
 use App\Guesstimate\Library\FeatureService;
 use App\Guesstimate\Offers\BudgetSettings;
 use App\Guesstimate\Offers\OfferVersion;
+use App\Guesstimate\Offers\SupportPackages;
 use App\Guesstimate\Library\PageType;
 use App\Guesstimate\Pricing\CalcModel;
 use App\Guesstimate\Pricing\Decimal;
@@ -43,6 +44,7 @@ class SettingsController extends Controller
 		'kalkulacja' => 'Kalkulacja i rodzaje projektu',
 		'ogolne' => 'Waluta, zaokrąglenia i numeracja',
 		'dokument' => 'Dokument oferty',
+		'pakiety' => 'Pakiety support',
 		'wykonawca' => 'Dane wykonawcy',
 		'umowy' => 'Układ strony umów',
 		'tla' => 'Biblioteka teł',
@@ -94,6 +96,7 @@ class SettingsController extends Controller
 			'dokument' => $this->saveDocument($request),
 			'wykonawca' => $this->saveContractor($request),
 			'umowy' => $this->saveContractPage($request),
+			'pakiety' => $this->saveSupport($request),
 		};
 
 		if ($errors) {
@@ -283,6 +286,26 @@ class SettingsController extends Controller
 
 		if (! $errors) {
 			$this->settings->set('contract_page', $values);
+		}
+
+		return $errors;
+	}
+
+	/**
+	 * Wzór oferty support (pakiety, punkty, teksty stron). Dotyczy tylko nowych ofert support — zapisane mają własną kopię.
+	 */
+	private function saveSupport(Request $request): array
+	{
+		$input = json_decode((string) $request->input('payload'), true);
+
+		if (! is_array($input)) {
+			return ['payload' => 'Nie udało się odczytać pakietów. Odśwież stronę i spróbuj ponownie.'];
+		}
+
+		['data' => $data, 'errors' => $errors] = SupportPackages::validateTemplate($input);
+
+		if (! $errors) {
+			$this->settings->set('support_packages', $data);
 		}
 
 		return $errors;

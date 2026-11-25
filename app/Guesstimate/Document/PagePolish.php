@@ -15,7 +15,7 @@ final class PagePolish
 	public const EDGE_LABELS = ['pricing', 'references'];
 
 	/** Strony bez zdjęcia: tu dopasowanie grafiki nie ma do czego się odnosić. */
-	private const NO_IMAGES = ['pricing', 'extras'];
+	private const NO_IMAGES = ['pricing', 'extras', 'support_packages', 'support_legend'];
 
 	/** Wartości spoza domyślnych; domyślne to mały tytuł i zdjęcie 16:9. */
 	public const TITLE_SIZES = ['large' => 'osf-t-xl', 'xlarge' => 'osf-t-2xl'];

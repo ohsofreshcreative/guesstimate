@@ -56,10 +56,10 @@
     </div>
   </template>
 
-  {{-- Własna strona: treść z edytora WYSIWYG. x-for z kluczem strony odświeża edytor przy przejściu na inną własną stronę. --}}
-  <template x-for="id in (page.custom ? [selected] : [])" :key="id">
+  {{-- Własna strona i strony support: treść (wstęp) z edytora WYSIWYG. x-for z kluczem strony odświeża edytor przy przejściu na inną stronę. --}}
+  <template x-for="id in (page.html ? [selected] : [])" :key="id">
     <div {!! $field('html') !!}>
-      <p class="{{ $label }}" x-text="page.items ? 'Wstęp (opcjonalnie)' : 'Treść strony'"></p>
+      <p class="{{ $label }}" x-text="page.items || ! page.custom ? 'Wstęp (opcjonalnie)' : 'Treść strony'"></p>
       <div x-data="richText()" x-modelable="html" x-model="pageState.html" class="min-w-0">
         @include('guesstimate.partials.rich-text-body', ['label' => 'Treść strony', 'id' => 'f-ed-custom-html', 'headings' => true])
       </div>
@@ -103,6 +103,17 @@
       </template>
       <button type="button" class="{{ $secondary }}" x-on:click="addItem()" :disabled="pageState.items.length >= page.items.max">+ Dodaj pozycję</button>
       <p class="text-xs text-danger" x-text="fieldError(`document.pages.${selected}.items`)"></p>
+    </div>
+  </template>
+
+  {{-- Oferta support: pakiety (strona pakietów) i punkty z opisami (obie strony; legenda powstaje z punktów). --}}
+  <template x-if="pageType === 'support_packages' && state.document.support">
+    <div>@include('guesstimate.partials.support-editor', ['model' => 'state.document.support', 'parts' => ['packages', 'points']])</div>
+  </template>
+  <template x-if="pageType === 'support_legend' && state.document.support">
+    <div>
+      <p class="mb-3 text-xs text-ink-muted">Legenda pokazuje punkty pakietów z opisami, w kolumnach i kolorach pakietów. To te same punkty co na stronie pakietów — zmiana tutaj zmienia obie strony.</p>
+      @include('guesstimate.partials.support-editor', ['model' => 'state.document.support', 'parts' => ['points']])
     </div>
   </template>
 

@@ -43,7 +43,10 @@ class PublicationService
 			$blockers[] = 'Anulowanej oferty nie można publikować.';
 		}
 
-		if ($version->isBudget()) {
+		if ($version->isSupport()) {
+			$doc = DocumentSettings::forVersion($version, app(SettingsRepository::class)->all());
+			$blockers = array_merge($blockers, SupportPackages::problems($doc['support'] ?? []));
+		} elseif ($version->isBudget()) {
 			$blockers = array_merge($blockers, OfferContent::missing($version->content));
 
 			if (self::situationOverflows($version)) {
